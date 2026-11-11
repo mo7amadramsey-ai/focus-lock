@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'channel.dart';
+import 'storage.dart';
 import 'lock_setup.dart';
 import 'strict_shell.dart';
 
@@ -81,6 +82,8 @@ class _BrowserPageState extends State<BrowserPage> {
 
   // Download the current video into the app folder
   Future<void> download() async {
+    final dir = await chooseFolder(context); // subject folder
+    if (dir == null) return;
     final yt = YoutubeExplode();
     try {
       final id = VideoId(url);
@@ -88,8 +91,6 @@ class _BrowserPageState extends State<BrowserPage> {
       final video = await yt.videos.get(id);
       final manifest = await yt.videos.streamsClient.getManifest(id);
       final info = manifest.muxed.withHighestBitrate(); // video + audio in one file
-      final dir = Directory('${(await getApplicationDocumentsDirectory()).path}/videos');
-      await dir.create(recursive: true);
       final safe = video.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
       final out = File('${dir.path}/$safe.mp4').openWrite();
       final total = info.size.totalBytes;

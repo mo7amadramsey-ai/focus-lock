@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'browser_page.dart';
 import 'channel.dart';
 import 'library_page.dart';
+import 'moodle_page.dart';
 import 'player_page.dart';
 import 'strict_shell.dart';
 
@@ -42,7 +43,9 @@ class _BootState extends State<Boot> {
       final target = s['target'] as String;
       next = s['type'] == 'web'
           ? StrictWebPage(url: target, endMillis: end)
-          : PlayerPage(path: target, endMillis: end);
+          : s['type'] == 'moodle'
+              ? StrictMoodlePage(url: target, endMillis: end)
+              : PlayerPage(path: target, endMillis: end);
     }
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => next));
   }
@@ -63,6 +66,12 @@ class Home extends StatelessWidget {
               onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const BrowserPage())),
               icon: const Icon(Icons.public),
               label: const Text('متصفح يوتيوب'),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const MoodlePage())),
+              icon: const Icon(Icons.school),
+              label: const Text('المودل'),
             ),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
