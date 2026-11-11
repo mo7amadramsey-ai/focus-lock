@@ -7,6 +7,7 @@ import 'channel.dart';
 import 'storage.dart';
 import 'lock_setup.dart';
 import 'strict_shell.dart';
+import 'theme.dart';
 
 // Only these domains may ever load. Anything else is blocked.
 bool isYoutube(String url) {
@@ -16,7 +17,8 @@ bool isYoutube(String url) {
 
 /// Normal YouTube-only browser. Used before strict mode starts.
 class BrowserPage extends StatefulWidget {
-  const BrowserPage({super.key});
+  final String? initialUrl; // e.g. a YouTube link opened from Moodle
+  const BrowserPage({super.key, this.initialUrl});
   @override
   State<BrowserPage> createState() => _BrowserPageState();
 }
@@ -39,7 +41,7 @@ class _BrowserPageState extends State<BrowserPage> {
             isYoutube(r.url) || r.url == 'about:blank' ? NavigationDecision.navigate : NavigationDecision.prevent,
         onUrlChange: (c) => setState(() => url = c.url ?? ''),
       ))
-      ..loadRequest(Uri.parse('https://m.youtube.com'));
+      ..loadRequest(Uri.parse(widget.initialUrl ?? 'https://m.youtube.com'));
   }
 
   // Read the real video length from the page's <video> element
@@ -115,7 +117,13 @@ class _BrowserPageState extends State<BrowserPage> {
 
   @override
   Widget build(BuildContext c) => Scaffold(
-        appBar: AppBar(title: const Text('يوتيوب')),
+        appBar: AppBar(
+          title: const Row(children: [
+            Icon(Icons.smart_display, color: kAccent),
+            SizedBox(width: 10),
+            Text('يوتيوب'),
+          ]),
+        ),
         body: Column(children: [
           Expanded(child: WebViewWidget(controller: w)),
           if (onVideo)

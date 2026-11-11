@@ -2,7 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'browser_page.dart';
 import 'channel.dart';
+import 'docs.dart';
+import 'theme.dart';
 import 'lock_setup.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
@@ -39,7 +43,69 @@ dynamic decodeJs(Object r) {
   return d;
 }
 
-/// Moodle browser (university domain only) with download + strict mode
+// JS that runs INSIDE the Moodle page (so it keeps the login session) and streams a file to Flutter.
+// doc == true: html pages are not files -> report them back ('H'), or resolve the real
+// file link of a Moodle "resource" page ('R'); videos are left to the normal page ('H').
+const _fetchFn = r"""async function(url, doc){
+  try {
+    const r = await fetch(url, {credentials: 'include'});
+    if (!r.ok) { FLDL.postMessage('X|HTTP ' + r.status); return; }
+    const ct = r.headers.get('content-type') || '';
+    if (doc && (ct.indexOf('text/html') === 0 || ct.indexOf('video/') === 0)) {
+      if (ct.indexOf('text/html') === 0 && url.indexOf('/mod/resource/') > -1) {
+        const t = await r.text();
+        const m = t.match(/https?:[^"'<>\s]+pluginfile\.php[^"'<>\s]+/);
+        if (m) { FLDL.postMessage('R|' + m[0].replace(/&amp;/g, '&')); return; }
+      }
+      FLDL.postMessage('H|' + r.url); return;
+    }
+    FLDL.postMessage('S|' + (r.headers.get('content-length') || '0') + '|' + ct + '|' + r.url + '|' + (r.headers.get('content-disposition') || ''));
+    const rd = r.body.getReader();
+    while (true) {
+      const {done, value} = await rd.read();
+      if (done) break;
+      let bin = ''; const step = 0x8000;
+      for (let i = 0; i < value.length; i += step) bin += String.fromCharCode.apply(null, value.subarray(i, i + step));
+      FLDL.postMessage('C|' + btoa(bin));
+    }
+    FLDL.postMessage('E|');
+  } catch (e) { FLDL.postMessage('X|' + e); }
+}""";
+
+String fetchJs(String url, bool doc) => '($_fetchFn)(${jsonEncode(url)}, $doc);';
+
+// Links that should open as a document inside the app
+bool isDocLink(String url) {
+  final u = Uri.tryParse(url);
+  if (u == null) return false;
+  final p = u.path.toLowerCase();
+  if (isVideo(p)) return false;
+  return isDocPath(p) || p.contains('/mod/resource/view.php');
+}
+
+// File name from Content-Disposition, or the last URL segment
+Future<File> newDocFile(String finalUrl, String ct, String disp) async {
+  var name = '';
+  try {
+    final m = RegExp(r"filename\*=UTF-8''([^;]+)", caseSensitive: false).firstMatch(disp);
+    final m2 = RegExp(r'filename="?([^";]+)"?', caseSensitive: false).firstMatch(disp);
+    if (m != null) {
+      name = Uri.decodeComponent(m.group(1)!);
+    } else if (m2 != null) {
+      name = m2.group(1)!;
+    } else {
+      final segs = Uri.parse(finalUrl).pathSegments;
+      name = segs.isEmpty ? 'document' : segs.last;
+    }
+  } catch (_) {}
+  name = safeName(name);
+  if (name.isEmpty) name = 'document';
+  if (!isDocPath(name)) name += extFromContentType(ct);
+  return File('${(await docsRoot()).path}/$name');
+}
+
+/// Moodle browser (university domain only) with download + strict mode.
+/// YouTube links open in the in-app YouTube browser; documents open in the in-app viewer.
 class MoodlePage extends StatefulWidget {
   const MoodlePage({super.key});
   @override
@@ -53,24 +119,64 @@ class _MoodlePageState extends State<MoodlePage> {
   IOSink? sink;
   File? outFile;
   int total = 0, got = 0;
+  bool docMode = false, resolved = false;
+  String? docUrl;
+  final bypass = <String>{}; // urls the page may load once without being intercepted
+  Future<void> _q = Future.value(); // chunks are handled strictly in order
 
   @override
   void initState() {
     super.initState();
     w = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      // Receives the downloaded video in chunks from the page (uses the page's login session)
-      ..addJavaScriptChannel('FLDL', onMessageReceived: (m) => onChunk(m.message))
+      // Receives files in chunks from the page (uses the page's login session)
+      ..addJavaScriptChannel('FLDL', onMessageReceived: (m) {
+        _q = _q.then((_) => onChunk(m.message)).catchError((_) {});
+      })
       ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (r) =>
-            !r.isMainFrame || isMoodle(r.url) ? NavigationDecision.navigate : NavigationDecision.prevent,
+        onNavigationRequest: (r) {
+          if (!r.isMainFrame) return NavigationDecision.navigate;
+          if (isYoutube(r.url)) {
+            openYoutube(r.url);
+            return NavigationDecision.prevent;
+          }
+          if (!isMoodle(r.url)) return NavigationDecision.prevent;
+          if (bypass.remove(r.url)) return NavigationDecision.navigate;
+          if (isDocLink(r.url)) {
+            openDoc(r.url);
+            return NavigationDecision.prevent;
+          }
+          return NavigationDecision.navigate;
+        },
         onUrlChange: (c) => url = c.url ?? url,
+        onPageFinished: (_) => bypass.clear(),
       ))
       ..loadRequest(Uri.parse(moodleHome));
   }
 
   void toast(String t) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+  }
+
+  // ---- YouTube link inside Moodle -> in-app YouTube browser ----
+  void openYoutube(String u) {
+    String target = u;
+    final id = VideoId.parseVideoId(u);
+    if (id != null) target = 'https://m.youtube.com/watch?v=$id';
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => BrowserPage(initialUrl: target)));
+  }
+
+  // ---- Document link -> download with the Moodle session -> in-app viewer ----
+  Future<void> openDoc(String u) async {
+    if (progress.value.isNotEmpty) return;
+    docMode = true;
+    resolved = false;
+    docUrl = u;
+    total = 0;
+    got = 0;
+    progress.value = 'جاري فتح المستند...';
+    await w.runJavaScript(fetchJs(u, true));
   }
 
   Future<Map?> findVideo() async {
@@ -87,7 +193,7 @@ class _MoodlePageState extends State<MoodlePage> {
     return m;
   }
 
-  // ---- Download ----
+  // ---- Download the video of the current page ----
   Future<void> download() async {
     final v = await findVideo();
     if (v == null || !mounted) return;
@@ -102,51 +208,77 @@ class _MoodlePageState extends State<MoodlePage> {
     if (await f.exists()) f = File('${dir.path}/$name-${DateTime.now().millisecondsSinceEpoch}$ext');
     outFile = f;
     sink = f.openWrite();
+    docMode = false;
     total = 0;
     got = 0;
     progress.value = 'جاري التحضير...';
-    // fetch inside the page (keeps the Moodle login) and stream chunks to Flutter
-    await w.runJavaScript('''
-(async function(url){
-  try {
-    const r = await fetch(url, {credentials: 'include'});
-    if (!r.ok) { FLDL.postMessage('X|HTTP ' + r.status); return; }
-    FLDL.postMessage('S|' + (r.headers.get('content-length') || '0'));
-    const rd = r.body.getReader();
-    while (true) {
-      const {done, value} = await rd.read();
-      if (done) break;
-      let bin = ''; const step = 0x8000;
-      for (let i = 0; i < value.length; i += step) bin += String.fromCharCode.apply(null, value.subarray(i, i + step));
-      FLDL.postMessage('C|' + btoa(bin));
-    }
-    FLDL.postMessage('E|');
-  } catch (e) { FLDL.postMessage('X|' + e); }
-})(${jsonEncode(vurl)});
-''');
+    await w.runJavaScript(fetchJs(vurl, false));
   }
 
   Future<void> onChunk(String msg) async {
-    final kind = msg[0], body = msg.substring(2);
-    if (kind == 'S') {
-      total = int.tryParse(body) ?? 0;
+    final kind = msg[0], body = msg.length > 2 ? msg.substring(2) : '';
+    if (kind == 'R') {
+      // a Moodle resource page pointing to the real file: fetch that file instead
+      if (!resolved && docUrl != null) {
+        resolved = true;
+        docUrl = body;
+        await w.runJavaScript(fetchJs(body, true));
+        return;
+      }
+      loadRaw();
+    } else if (kind == 'H') {
+      // not a file (normal page / video): let the WebView show it
+      loadRaw(extra: body);
+    } else if (kind == 'S') {
+      final p = body.split('|');
+      total = int.tryParse(p[0]) ?? 0;
+      if (docMode) {
+        final f = await newDocFile(p.length > 2 ? p[2] : docUrl!, p.length > 1 ? p[1] : '',
+            p.length > 3 ? p.sublist(3).join('|') : '');
+        outFile = f;
+        sink = f.openWrite();
+      }
     } else if (kind == 'C') {
       final bytes = base64Decode(body);
       sink?.add(bytes);
       got += bytes.length;
-      progress.value = total > 0 ? 'تحميل ${(got * 100 / total).toStringAsFixed(0)}%' : 'تحميل ${(got / 1048576).toStringAsFixed(0)}MB';
+      progress.value = total > 0
+          ? 'تحميل ${(got * 100 / total).toStringAsFixed(0)}%'
+          : 'تحميل ${(got / 1048576).toStringAsFixed(0)}MB';
     } else if (kind == 'E') {
       await sink?.close();
       sink = null;
       progress.value = '';
-      toast('تم التحميل');
+      if (docMode) {
+        if (mounted && outFile != null) {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => DocViewerPage(path: outFile!.path)));
+        }
+      } else {
+        toast('تم التحميل');
+      }
     } else if (kind == 'X') {
       await sink?.close();
       sink = null;
-      try { await outFile?.delete(); } catch (_) {}
+      try {
+        await outFile?.delete();
+      } catch (_) {}
       progress.value = '';
-      toast('فشل التحميل: $body');
+      if (docMode) {
+        loadRaw(); // fetch failed (e.g. redirect to another site): let the page load normally
+      } else {
+        toast('فشل التحميل: $body');
+      }
     }
+  }
+
+  // Load the original link in the WebView without intercepting it again
+  void loadRaw({String? extra}) {
+    progress.value = '';
+    final u = docUrl;
+    if (u == null) return;
+    bypass.add(u);
+    if (extra != null) bypass.add(extra);
+    w.loadRequest(Uri.parse(u));
   }
 
   // ---- Strict mode on the current Moodle video page ----
@@ -181,14 +313,36 @@ class _MoodlePageState extends State<MoodlePage> {
 
   @override
   Widget build(BuildContext c) => Scaffold(
-        appBar: AppBar(title: const Text('المودل')),
+        appBar: AppBar(
+          title: const Row(children: [
+            Icon(Icons.school, color: kAccent),
+            SizedBox(width: 10),
+            Text('المودل'),
+          ]),
+          actions: [
+            IconButton(
+              tooltip: 'المستندات',
+              icon: const Icon(Icons.description_outlined),
+              onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const DocsPage())),
+            ),
+          ],
+        ),
         body: Column(children: [
           Expanded(child: WebViewWidget(controller: w)),
-          Padding(
+          Container(
+            color: kSurface,
             padding: const EdgeInsets.all(8),
             child: ValueListenableBuilder(
               valueListenable: progress,
               builder: (_, String p, __) => Row(children: [
+                IconButton(
+                  tooltip: 'رجوع',
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () async {
+                    if (await w.canGoBack()) w.goBack();
+                  },
+                ),
+                const SizedBox(width: 4),
                 Expanded(
                     child: FilledButton.icon(
                         onPressed: startStrict, icon: const Icon(Icons.lock), label: const Text('الوضع الصارم'))),

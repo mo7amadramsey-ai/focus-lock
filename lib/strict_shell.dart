@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'channel.dart';
+import 'theme.dart';
 
 /// Wraps any content in the strict mode:
 /// - no back button, no exit button, no emergency tap
@@ -20,6 +22,7 @@ class StrictShell extends StatefulWidget {
 class _StrictShellState extends State<StrictShell> {
   Timer? _t;
   Duration left = Duration.zero;
+  late final int _totalMs = (widget.endMillis - DateTime.now().millisecondsSinceEpoch).clamp(1, 1 << 40).toInt();
   bool ringing = false;
 
   @override
@@ -64,33 +67,66 @@ class _StrictShellState extends State<StrictShell> {
   }
 
   @override
-  Widget build(BuildContext c) => PopScope(
-        canPop: false, // back is blocked
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: SafeArea(
-            child: Column(children: [
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text('الوضع الصارم - المتبقي ${_fmt(left)}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 18)),
-              ),
-              // Emergency calling only: opens dialer / keypad / contacts
-              TextButton.icon(
-                onPressed: () => ch.invokeMethod('openDialer'),
-                icon: const Icon(Icons.dialpad),
-                label: const Text('اتصال'),
-              ),
-              if (ringing)
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  onPressed: () => ch.invokeMethod('answerCall'),
-                  icon: const Icon(Icons.call),
-                  label: const Text('رد على المكالمة'),
+  Widget build(BuildContext c) {
+    final progress = (1 - left.inMilliseconds / _totalMs).clamp(0.0, 1.0).toDouble();
+    return PopScope(
+      canPop: false, // back is blocked
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Column(children: [
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(18)),
+              child: Row(children: [
+                // Countdown ring
+                SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: Stack(alignment: Alignment.center, children: [
+                    SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 5,
+                        color: kAccent,
+                        backgroundColor: Colors.white12,
+                      ),
+                    ),
+                    const Icon(Icons.lock, size: 20, color: Colors.white70),
+                  ]),
                 ),
-              Expanded(child: widget.child),
-            ]),
-          ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('الوضع الصارم', style: TextStyle(color: Colors.white60, fontSize: 13)),
+                    Text(_fmt(left),
+                        style: const TextStyle(
+                            fontSize: 26, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()])),
+                  ]),
+                ),
+                if (ringing)
+                  IconButton.filled(
+                    style: IconButton.styleFrom(backgroundColor: Colors.green),
+                    onPressed: () => ch.invokeMethod('answerCall'),
+                    icon: const Icon(Icons.call),
+                    tooltip: 'رد على المكالمة',
+                  ),
+                const SizedBox(width: 6),
+                // Calling only: opens dialer / keypad / contacts
+                IconButton.filledTonal(
+                  onPressed: () => ch.invokeMethod('openDialer'),
+                  icon: const Icon(Icons.dialpad),
+                  tooltip: 'اتصال',
+                ),
+              ]),
+            ),
+            Expanded(child: widget.child),
+          ]),
         ),
-      );
+      ),
+    );
+  }
 }

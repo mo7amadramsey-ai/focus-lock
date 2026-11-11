@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'player_page.dart';
 import 'storage.dart';
+import 'theme.dart';
 
 // Folder browser for downloaded videos. Open a folder = same page with that directory.
 class LibraryPage extends StatefulWidget {
@@ -81,10 +82,17 @@ class _LibraryPageState extends State<LibraryPage> {
             FloatingActionButton(onPressed: newFolder, child: const Icon(Icons.create_new_folder)),
         body: items.isEmpty
             ? const Center(child: Text('فارغ'))
-            : ListView(children: [
+            : ListView(padding: const EdgeInsets.all(12), children: [
                 for (final e in items)
-                  ListTile(
-                    leading: Icon(e is Directory ? Icons.folder : Icons.play_circle),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(14)),
+                    child: ListTile(
+                    leading: Icon(e is Directory ? Icons.folder : Icons.play_circle, color: kAccent, size: 30),
+                    subtitle: e is File
+                        ? Text('${(e.lengthSync() / 1048576).toStringAsFixed(1)} MB',
+                            style: const TextStyle(color: Colors.white54))
+                        : null,
                     title: Text(e is File ? nameOf(e).replaceAll(RegExp(r'\.[A-Za-z0-9]+$'), '') : nameOf(e)),
                     onTap: () async {
                       if (e is Directory) {
@@ -106,6 +114,7 @@ class _LibraryPageState extends State<LibraryPage> {
                         const PopupMenuItem(value: 'delete', child: Text('حذف')),
                       ],
                     ),
+                  ),
                   ),
               ]),
       );
