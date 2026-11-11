@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'channel.dart';
+import 'lock_setup.dart';
 import 'strict_shell.dart';
 
 // Only these domains may ever load. Anything else is blocked.
@@ -55,6 +56,7 @@ class _BrowserPageState extends State<BrowserPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('انتظر حتى يحمل الفيديو ثم حاول')));
       return;
     }
+    if (!await ensureLockReady(context)) return; // strong lock must be enabled first
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

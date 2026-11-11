@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'channel.dart';
+import 'lock_setup.dart';
 import 'strict_shell.dart';
 
 /// Local video player. endMillis == null -> normal preview with a "start strict"
@@ -41,6 +42,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   // Start strict mode: timer = full video duration, from now
   Future<void> startStrict() async {
+    if (!await ensureLockReady(context)) return; // strong lock must be enabled first
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

@@ -38,6 +38,20 @@
             </intent-filter>
         </receiver>
 
+        <!-- Lock enforcer: user enables it once from Accessibility settings -->
+        <service
+            android:name=".LockService"
+            android:exported="true"
+            android:label="Focus Lock"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config"/>
+        </service>
+
         <meta-data android:name="flutterEmbedding" android:value="2"/>
     </application>
 </manifest>

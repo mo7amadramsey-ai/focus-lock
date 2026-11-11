@@ -71,6 +71,17 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                // Is our accessibility service switched on?
+                "isAccessibilityEnabled" -> {
+                    val on = android.provider.Settings.Secure.getString(
+                        contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                    ) ?: ""
+                    result.success(on.contains("$packageName/"))
+                }
+                "openAccessibilitySettings" -> {
+                    startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    result.success(true)
+                }
                 "isDeviceOwner" -> {
                     val dpm = getSystemService(DevicePolicyManager::class.java)
                     result.success(dpm.isDeviceOwnerApp(packageName))
