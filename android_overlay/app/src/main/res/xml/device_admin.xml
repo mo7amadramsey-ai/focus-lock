@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Device admin policies (empty: only needed so the app can become Device Owner) -->
+<device-admin>
+    <uses-policies />
+</device-admin>
