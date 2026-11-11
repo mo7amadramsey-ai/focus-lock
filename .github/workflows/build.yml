@@ -18,7 +18,24 @@ jobs:
       # Overlay our native code, manifest and resources
       - run: cp -r android_overlay/* android/
       - run: flutter pub get
-      - run: flutter build apk --release
+      - name: Build APK
+        run: flutter build apk --release 2>&1 | tee build.log
+        shell: bash
+      # On failure, publish the error lines to a 'buildlog' branch so they can be read
+      - name: Publish build log on failure
+        if: failure()
+        run: |
+          mkdir /tmp/bl
+          grep -nE "Error|error:|FAILURE|What went wrong|lib/" build.log | head -80 > /tmp/bl/errors.txt || true
+          tail -n 120 build.log > /tmp/bl/tail.txt || true
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git checkout --orphan buildlog
+          git rm -rf . -q
+          cp /tmp/bl/errors.txt /tmp/bl/tail.txt .
+          git add errors.txt tail.txt
+          git commit -qm "build log"
+          git push -f origin buildlog
       - uses: actions/upload-artifact@v4
         with:
           name: focus-lock-apk
