@@ -164,6 +164,12 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     result.success(true)
                 }
+                // True only when OUR window has the focus and is not in a floating / split / pop-up window.
+                // (With floating windows the app stays "resumed", so the lifecycle alone cannot tell.)
+                "isFocused" -> {
+                    val multi = Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode
+                    result.success(hasWindowFocus() && !multi)
+                }
                 "isDeviceOwner" -> {
                     val dpm = getSystemService(DevicePolicyManager::class.java)
                     result.success(dpm.isDeviceOwnerApp(packageName))

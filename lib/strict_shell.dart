@@ -34,7 +34,7 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
   Duration get left => Duration(milliseconds: _leftMs);
   DateTime _last = DateTime.now();
   int _n = 0;
-  bool _fg = true, counting = true;
+  bool _fg = true, _focus = true, counting = true;
   bool ringing = false, expired = false, sheetOpen = false, unlocked = false;
   // Same key in portrait and landscape: the video is MOVED, never rebuilt, when the phone rotates
   final _childKey = GlobalKey();
@@ -72,7 +72,9 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
     _last = now;
     if (unlocked || expired || !mounted) return;
     final was = counting;
-    counting = _fg && (widget.playing?.value ?? true);
+    // Counts only if: app on screen + OUR window focused and full-screen (no floating/pop-up/split window) + video playing
+    ch.invokeMethod<bool>('isFocused').then((v) => _focus = v ?? true).catchError((_) => true);
+    counting = _fg && _focus && (widget.playing?.value ?? true);
     if (counting) _leftMs -= dt;
     if (_leftMs <= 0) {
       _leftMs = 0;
@@ -204,7 +206,7 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-              unlocked ? 'بدون قفل' : (expired ? 'انتهى وقت التركيز' : (counting ? 'الوضع الصارم' : 'متوقف — شغّل الفيديو')),
+              unlocked ? 'بدون قفل' : (expired ? 'انتهى وقت التركيز' : (counting ? 'الوضع الصارم' : (!_focus ? 'متوقف — أغلق النوافذ العائمة' : 'متوقف — شغّل الفيديو'))),
               style: const TextStyle(color: Colors.white60, fontSize: 13),
             ),
             Text(
