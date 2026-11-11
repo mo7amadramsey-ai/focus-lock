@@ -7,14 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
 import 'channel.dart';
+import 'storage.dart';
 import 'theme.dart';
 
 // Folder that holds every document (opened from Moodle, imported, or sent from Drive)
-Future<Directory> docsRoot() async {
-  final d = Directory('${(await getApplicationDocumentsDirectory()).path}/documents');
-  if (!await d.exists()) await d.create(recursive: true);
-  return d;
-}
+Future<Directory> docsRoot() => dataDir('documents');
 
 const docExt = ['.pdf', '.docx', '.pptx', '.xlsx', '.doc', '.ppt', '.xls', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
 const _imgExt = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];

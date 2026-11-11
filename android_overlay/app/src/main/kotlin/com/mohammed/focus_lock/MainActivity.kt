@@ -122,6 +122,28 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(false) // Drive not installed
                     }
                 }
+                // Public storage access (so videos/documents survive uninstall and show in file managers)
+                "hasAllFiles" -> {
+                    result.success(
+                        if (Build.VERSION.SDK_INT >= 30) android.os.Environment.isExternalStorageManager()
+                        else hasPerm(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    )
+                }
+                "requestAllFiles" -> {
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        try {
+                            startActivity(android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                android.net.Uri.parse("package:$packageName")))
+                        } catch (e: Exception) {
+                            startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                        }
+                    } else {
+                        ActivityCompat.requestPermissions(this,
+                            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), 2)
+                    }
+                    result.success(true)
+                }
                 "isDeviceOwner" -> {
                     val dpm = getSystemService(DevicePolicyManager::class.java)
                     result.success(dpm.isDeviceOwnerApp(packageName))

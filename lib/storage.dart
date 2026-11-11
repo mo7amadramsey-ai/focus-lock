@@ -2,13 +2,64 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'channel.dart';
+
+// Public folder on the phone's storage: survives uninstalling the app and is visible in any file manager.
+//   /storage/emulated/0/FocusLock/videos     (subfolders = subjects)
+//   /storage/emulated/0/FocusLock/documents
+const publicRoot = '/storage/emulated/0/FocusLock';
+
+// "All files access" (Android 11+) / storage permission (older): needed to use the public folder
+Future<bool> hasAllFiles() async {
+  try {
+    return await ch.invokeMethod<bool>('hasAllFiles') ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Moves what the older versions kept inside the app (deleted on uninstall) to the public folder
+Future<void> _migrate(Directory from, Directory to) async {
+  try {
+    if (!await from.exists()) return;
+    var failed = false;
+    for (final e in from.listSync(recursive: true).whereType<File>()) {
+      final rel = e.path.substring(from.path.length + 1);
+      final dest = File('${to.path}/$rel');
+      try {
+        if (dest.existsSync()) continue; // never overwrite
+        await dest.parent.create(recursive: true);
+        try {
+          await e.rename(dest.path);
+        } catch (_) {
+          await e.copy(dest.path); // rename fails across storage volumes
+          await e.delete();
+        }
+      } catch (_) {
+        failed = true;
+      }
+    }
+    if (!failed) await from.delete(recursive: true);
+  } catch (_) {}
+}
+
+/// `name` = 'videos' or 'documents'. Public folder when the permission is granted, else the private app folder.
+Future<Directory> dataDir(String name) async {
+  final priv = Directory('${(await getApplicationDocumentsDirectory()).path}/$name');
+  if (await hasAllFiles()) {
+    final pub = Directory('$publicRoot/$name');
+    try {
+      if (!await pub.exists()) await pub.create(recursive: true);
+      await _migrate(priv, pub);
+      return pub;
+    } catch (_) {} // could not create it: fall back to the private folder
+  }
+  if (!await priv.exists()) await priv.create(recursive: true);
+  return priv;
+}
 
 // Root folder of all saved videos (subfolders = your subjects)
-Future<Directory> videosRoot() async {
-  final d = Directory('${(await getApplicationDocumentsDirectory()).path}/videos');
-  if (!await d.exists()) await d.create(recursive: true);
-  return d;
-}
+Future<Directory> videosRoot() => dataDir('videos');
 
 const videoExt = ['.mp4', '.webm', '.mkv', '.mov', '.m4v', '.3gp'];
 bool isVideo(String p) => videoExt.any((e) => p.toLowerCase().endsWith(e));

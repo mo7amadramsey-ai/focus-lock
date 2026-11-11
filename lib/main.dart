@@ -9,6 +9,7 @@ import 'library_page.dart';
 import 'lock_setup.dart';
 import 'moodle_page.dart';
 import 'player_page.dart';
+import 'storage.dart';
 import 'strict_shell.dart';
 import 'theme.dart';
 
@@ -85,6 +86,26 @@ class _HomeState extends State<Home> {
   void initState() {
     super.initState();
     _status();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askStorage());
+  }
+
+  // Offer the public folder (survives uninstall, visible in file managers)
+  Future<void> _askStorage() async {
+    if (await hasAllFiles() || !mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حفظ الملفات خارج التطبيق'),
+        content: const Text(
+            'اسمح بالوصول لمجلد FocusLock على الجهاز لتبقى فيديوهاتك ومستنداتك محفوظة عند حذف التطبيق وإعادة تثبيته، '
+            'ولتضيف ملفات إليه من مدير الملفات فتظهر داخل التطبيق.\n\nالمسار: FocusLock/videos و FocusLock/documents'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('لاحقاً')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('السماح')),
+        ],
+      ),
+    );
+    if (ok == true) await ch.invokeMethod('requestAllFiles');
   }
 
   Future<void> _status() async {
