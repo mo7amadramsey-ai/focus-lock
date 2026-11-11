@@ -12,16 +12,17 @@ import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 // Empty receiver: lets the app be registered as Device Owner via adb
 class FocusAdmin : DeviceAdminReceiver()
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private lateinit var channel: MethodChannel
     private var listening = false
+    private var incoming: String? = null // file opened from Drive / another app
 
     // The session lives in native storage so it survives app kill / reboot
     private val prefs by lazy { getSharedPreferences("strict", MODE_PRIVATE) }
@@ -45,6 +46,23 @@ class MainActivity : FlutterActivity() {
                     enforceLock()
                     listenCalls()
                     result.success(true)
+                }
+                // Extend the running (or just-expired) session: new end time, lock again
+                "extendLock" -> {
+                    prefs.edit().putLong("end", (call.argument<Number>("end"))!!.toLong()).apply()
+                    enforceLock()
+                    result.success(true)
+                }
+                // Timer ended: release kiosk mode but keep the session data so it can be extended
+                "releaseLock" -> {
+                    try { stopLockTask() } catch (e: Exception) {}
+                    result.success(true)
+                }
+                // Path of a file that another app (Drive) sent to us, once
+                "takeIncoming" -> {
+                    val p = incoming
+                    incoming = null
+                    result.success(p)
                 }
                 "stopLock" -> {
                     prefs.edit().clear().apply()
@@ -106,6 +124,39 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        grabIntent(intent)
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        grabIntent(intent)
+    }
+
+    // Copies a file shared/opened from Drive into our cache so Dart can import it
+    @Suppress("DEPRECATION")
+    private fun grabIntent(i: android.content.Intent?) {
+        if (i == null) return
+        val uri: android.net.Uri = when (i.action) {
+            android.content.Intent.ACTION_VIEW -> i.data
+            android.content.Intent.ACTION_SEND -> i.getParcelableExtra<android.net.Uri>(android.content.Intent.EXTRA_STREAM)
+            else -> null
+        } ?: return
+        try {
+            var name = "file"
+            contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val ix = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (ix >= 0 && c.moveToFirst()) name = c.getString(ix) ?: "file"
+            }
+            val dir = java.io.File(cacheDir, "incoming")
+            dir.mkdirs()
+            val out = java.io.File(dir, name.replace(Regex("[/:*?<>|]"), "_"))
+            contentResolver.openInputStream(uri)?.use { inp -> out.outputStream().use { inp.copyTo(it) } }
+            incoming = out.absolutePath
+        } catch (e: Exception) {}
     }
 
     // Re-enter lock whenever the app comes back during an active session

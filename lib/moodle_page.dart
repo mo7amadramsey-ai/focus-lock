@@ -6,7 +6,9 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'browser_page.dart';
 import 'channel.dart';
 import 'docs.dart';
+import 'preview_page.dart';
 import 'theme.dart';
+import 'web_fs.dart';
 import 'lock_setup.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
@@ -281,6 +283,79 @@ class _MoodlePageState extends State<MoodlePage> {
     w.loadRequest(Uri.parse(u));
   }
 
+  // ---- Preview: list the YouTube links / videos / players on this page and open them unlocked ----
+  static const _previewJs = r'''
+(function(){
+  var out = [], seen = {};
+  function add(kind, title, url){ if(!url || seen[url]) return; seen[url]=1; out.push({kind:kind,title:title,url:url}); }
+  document.querySelectorAll('iframe').forEach(function(f){
+    var s = f.src || f.getAttribute('data-src') || '';
+    if (!s) return;
+    var m = s.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/);
+    if (m) add('yt', f.title || 'فيديو يوتيوب', 'https://m.youtube.com/watch?v=' + m[1]);
+    else add('frame', f.title || 'مشغّل مضمّن', s);
+  });
+  document.querySelectorAll('a[href]').forEach(function(a){
+    if (/youtu\.be\/|youtube\.com\/(watch|shorts)/.test(a.href)) add('yt', (a.textContent||'').trim() || 'رابط يوتيوب', a.href);
+  });
+  document.querySelectorAll('video').forEach(function(v){
+    var s = v.currentSrc || v.src || (v.querySelector('source')||{}).src;
+    if (s && s.indexOf('blob:') !== 0) add('video', 'فيديو الصفحة', s);
+  });
+  return JSON.stringify(out);
+})()
+''';
+
+  Future<void> preview() async {
+    List items = [];
+    try {
+      final r = await w.runJavaScriptReturningResult(_previewJs);
+      var t = r.toString();
+      if (t.startsWith('"')) t = jsonDecode(t) as String;
+      items = jsonDecode(t) as List;
+    } catch (_) {}
+    if (!mounted) return;
+    if (items.isEmpty) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => PreviewPage(url: url.split('#').first)));
+      return;
+    }
+    final pick = await showModalBottomSheet<Map>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('معاينة فيديوهات الصفحة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ),
+          Flexible(
+            child: ListView(shrinkWrap: true, children: [
+              for (final it in items)
+                ListTile(
+                  leading: Icon(it['kind'] == 'yt' ? Icons.smart_display : Icons.play_circle_outline,
+                      color: it['kind'] == 'yt' ? kAccent : null),
+                  title: Text('${it['title']}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(it['kind'] == 'yt' ? 'يوتيوب' : (it['kind'] == 'video' ? 'فيديو' : 'مشغّل خارجي'),
+                      style: const TextStyle(color: Colors.white54)),
+                  onTap: () => Navigator.pop(ctx, it),
+                ),
+              ListTile(
+                leading: const Icon(Icons.open_in_full),
+                title: const Text('معاينة الصفحة كاملة'),
+                onTap: () => Navigator.pop(ctx, {'kind': 'page', 'url': url.split('#').first}),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    final u = pick['url'] as String;
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => pick['kind'] == 'yt' ? BrowserPage(initialUrl: u) : PreviewPage(url: u)));
+  }
+
   // ---- Strict mode on the current Moodle video page ----
   Future<void> startStrict() async {
     final r = await w.runJavaScriptReturningResult("(document.querySelector('video')||{}).duration || 0");
@@ -291,20 +366,10 @@ class _MoodlePageState extends State<MoodlePage> {
     }
     final d = Duration(seconds: s.ceil());
     if (!mounted || !await ensureLockReady(context)) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('بدء الوضع الصارم'),
-        content: Text('سيُقفل الهاتف ${d.inMinutes} دقيقة (مدة الفيديو) ولا يمكن الخروج قبل انتهائها.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ابدأ')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    final extra = await confirmStrict(context, d);
+    if (extra == null) return;
     final target = url.split('#').first;
-    final end = DateTime.now().add(d).millisecondsSinceEpoch;
+    final end = DateTime.now().add(d + Duration(minutes: extra)).millisecondsSinceEpoch;
     await ch.invokeMethod('startLock', {'end': end, 'type': 'moodle', 'target': target});
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -328,7 +393,7 @@ class _MoodlePageState extends State<MoodlePage> {
           ],
         ),
         body: Column(children: [
-          Expanded(child: WebViewWidget(controller: w)),
+          Expanded(child: FsWebView(w)),
           Container(
             color: kSurface,
             padding: const EdgeInsets.all(8),
@@ -341,6 +406,11 @@ class _MoodlePageState extends State<MoodlePage> {
                   onPressed: () async {
                     if (await w.canGoBack()) w.goBack();
                   },
+                ),
+                IconButton(
+                  tooltip: 'معاينة الفيديوهات',
+                  icon: const Icon(Icons.visibility),
+                  onPressed: preview,
                 ),
                 const SizedBox(width: 4),
                 Expanded(
@@ -404,5 +474,5 @@ class _StrictMoodlePageState extends State<StrictMoodlePage> {
 
   @override
   Widget build(BuildContext c) =>
-      StrictShell(endMillis: widget.endMillis, child: WebViewWidget(controller: w));
+      StrictShell(endMillis: widget.endMillis, child: FsWebView(w, strict: true));
 }

@@ -8,12 +8,31 @@ import 'storage.dart';
 import 'lock_setup.dart';
 import 'strict_shell.dart';
 import 'theme.dart';
+import 'web_fs.dart';
 
 // Only these domains may ever load. Anything else is blocked.
 bool isYoutube(String url) {
   final h = Uri.tryParse(url)?.host ?? '';
   return h == 'youtube.com' || h.endsWith('.youtube.com') || h == 'youtu.be';
 }
+
+// Google sign-in pages (so you can log in to YouTube inside the app)
+bool isSignIn(String url) {
+  final u = Uri.tryParse(url);
+  if (u == null) return false;
+  final h = u.host;
+  if (h == 'accounts.google.com' || h == 'consent.google.com' || h == 'accounts.youtube.com' ||
+      h == 'myaccount.google.com' || h.startsWith('accounts.google.')) {
+    return true;
+  }
+  if ((h == 'www.google.com' || h == 'google.com') &&
+      (u.path.startsWith('/accounts') || u.path.startsWith('/signin') || u.path.startsWith('/recaptcha'))) {
+    return true;
+  }
+  return false;
+}
+
+const loginUrl = 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fm.youtube.com%2F';
 
 /// Normal YouTube-only browser. Used before strict mode starts.
 class BrowserPage extends StatefulWidget {
@@ -35,10 +54,12 @@ class _BrowserPageState extends State<BrowserPage> {
     super.initState();
     w = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(kChromeUA)
       ..setNavigationDelegate(NavigationDelegate(
-        // Block everything that is not YouTube
-        onNavigationRequest: (r) =>
-            isYoutube(r.url) || r.url == 'about:blank' ? NavigationDecision.navigate : NavigationDecision.prevent,
+        // Only YouTube + Google sign-in. Embedded frames (captcha etc.) are allowed.
+        onNavigationRequest: (r) => !r.isMainFrame || isYoutube(r.url) || isSignIn(r.url) || r.url == 'about:blank'
+            ? NavigationDecision.navigate
+            : NavigationDecision.prevent,
         onUrlChange: (c) => setState(() => url = c.url ?? ''),
       ))
       ..loadRequest(Uri.parse(widget.initialUrl ?? 'https://m.youtube.com'));
@@ -60,22 +81,12 @@ class _BrowserPageState extends State<BrowserPage> {
       return;
     }
     if (!await ensureLockReady(context)) return; // strong lock must be enabled first
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('بدء الوضع الصارم'),
-        content: Text('سيُقفل الهاتف ${d.inMinutes} دقيقة (مدة الفيديو) ولا يمكن الخروج قبل انتهائها.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ابدأ')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    final extra = await confirmStrict(context, d);
+    if (extra == null) return;
     // Lock to this exact video
     final id = VideoId.parseVideoId(url);
     final target = 'https://m.youtube.com/watch?v=$id';
-    final end = DateTime.now().add(d).millisecondsSinceEpoch;
+    final end = DateTime.now().add(d + Duration(minutes: extra)).millisecondsSinceEpoch;
     await ch.invokeMethod('startLock', {'end': end, 'type': 'web', 'target': target});
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -116,16 +127,34 @@ class _BrowserPageState extends State<BrowserPage> {
   }
 
   @override
-  Widget build(BuildContext c) => Scaffold(
+  Widget build(BuildContext c) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop || webFullscreen.value) return;
+          if (await w.canGoBack()) {
+            w.goBack();
+          } else if (mounted) {
+            Navigator.pop(context);
+          }
+        },
+        child: Scaffold(
         appBar: AppBar(
           title: const Row(children: [
             Icon(Icons.smart_display, color: kAccent),
             SizedBox(width: 10),
             Text('يوتيوب'),
           ]),
+          actions: [
+            IconButton(
+              tooltip: 'تسجيل الدخول إلى حساب Google',
+              icon: const Icon(Icons.account_circle_outlined),
+              onPressed: () => w.loadRequest(Uri.parse(loginUrl)),
+            ),
+            IconButton(tooltip: 'تحديث', icon: const Icon(Icons.refresh), onPressed: () => w.reload()),
+          ],
         ),
         body: Column(children: [
-          Expanded(child: WebViewWidget(controller: w)),
+          Expanded(child: FsWebView(w)),
           if (onVideo)
             Padding(
               padding: const EdgeInsets.all(8),
@@ -145,7 +174,7 @@ class _BrowserPageState extends State<BrowserPage> {
               ),
             ),
         ]),
-      );
+      ));
 }
 
 /// Strict YouTube page: locked to ONE video. Cannot open anything else.
@@ -186,6 +215,7 @@ class _StrictWebPageState extends State<StrictWebPage> {
     super.initState();
     w = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(kChromeUA)
       ..setNavigationDelegate(NavigationDelegate(
         // Only the locked video is allowed
         onNavigationRequest: (r) => isYoutube(r.url) && r.url.contains('v=$id')
@@ -198,5 +228,5 @@ class _StrictWebPageState extends State<StrictWebPage> {
 
   @override
   Widget build(BuildContext c) =>
-      StrictShell(endMillis: widget.endMillis, child: WebViewWidget(controller: w));
+      StrictShell(endMillis: widget.endMillis, child: FsWebView(w, strict: true));
 }

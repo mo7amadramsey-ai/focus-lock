@@ -13,6 +13,9 @@ dependencies:
   youtube_explode_dart: ^2.3.0    # download videos
   path_provider: ^2.1.0           # app storage folder
   pdfx: ^2.9.2                    # in-app PDF viewer
-  archive: ^3.6.1                 # read docx/pptx text preview
+  archive: ^3.6.1                 # read docx/pptx/xlsx
+  local_auth: ^2.3.0              # app lock (fingerprint / phone PIN)
+  file_picker: ^8.1.2             # import documents from the phone
+  webview_flutter_android: any    # fullscreen video inside web pages
 flutter:
   uses-material-design: true

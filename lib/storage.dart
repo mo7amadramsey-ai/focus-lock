@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -74,4 +75,31 @@ Future<Directory?> chooseFolder(BuildContext c, {Directory? exclude}) async {
       ],
     ),
   );
+}
+
+// ---- Resume positions (where you stopped in each video) ----
+final _pos = <String, int>{};
+bool _posLoaded = false;
+
+Future<File> _posFile() async => File('${(await getApplicationSupportDirectory()).path}/positions.json');
+
+Future<int> loadPos(String path) async {
+  if (!_posLoaded) {
+    try {
+      final f = await _posFile();
+      if (await f.exists()) {
+        (jsonDecode(await f.readAsString()) as Map).forEach((k, v) => _pos[k as String] = (v as num).toInt());
+      }
+    } catch (_) {}
+    _posLoaded = true;
+  }
+  return _pos[path] ?? 0;
+}
+
+void setPos(String path, int ms) => _pos[path] = ms;
+
+Future<void> flushPos() async {
+  try {
+    await (await _posFile()).writeAsString(jsonEncode(_pos));
+  } catch (_) {}
 }
