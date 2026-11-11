@@ -15,7 +15,7 @@ dependencies:
   pdfx: ^2.9.2                    # in-app PDF viewer
   archive: ^3.6.1                 # read docx/pptx/xlsx
   local_auth: ^2.3.0              # app lock (fingerprint / phone PIN)
-  file_picker: ^8.1.2             # import documents from the phone
+  file_picker: ^10.3.0             # import documents from the phone
   webview_flutter_android: any    # fullscreen video inside web pages
 flutter:
   uses-material-design: true
