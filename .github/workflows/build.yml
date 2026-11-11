@@ -19,8 +19,22 @@ jobs:
       - run: cp -r android_overlay/* android/
       - run: flutter pub get
       - name: Build APK
-        run: flutter build apk --release 2>&1 | tee build.log
+        run: flutter build apk --release --build-number=${{ github.run_number }} 2>&1 | tee build.log
         shell: bash
+      # Re-sign with the PERMANENT key (stored in repo secrets) so every build can update the previous one.
+      # Without this each CI run used a fresh random debug key -> "package appears invalid" on update.
+      - name: Sign APK with the permanent key
+        env:
+          KS_B64: ${{ secrets.FL_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.FL_KEYSTORE_PASS }}
+        shell: bash
+        run: |
+          echo "$KS_B64" | base64 -d > /tmp/fl.jks
+          AS=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          "$AS" sign --ks /tmp/fl.jks --ks-key-alias focuslock --ks-pass env:KS_PASS --key-pass env:KS_PASS "$APK"
+          "$AS" verify --print-certs "$APK" | head -3
+          rm -f /tmp/fl.jks
       # On failure, publish the error lines to a 'buildlog' branch so they can be read
       - name: Publish build log on failure
         if: failure()
