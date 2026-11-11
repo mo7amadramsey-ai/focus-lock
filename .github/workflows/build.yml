@@ -2,6 +2,8 @@ name: Build APK
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: write   # needed to publish a Release
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,3 +23,10 @@ jobs:
         with:
           name: focus-lock-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+      # Publish the APK as a GitHub Release (visible in the repo's "Releases" section)
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Focus Lock v1.0.${{ github.run_number }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          make_latest: true
