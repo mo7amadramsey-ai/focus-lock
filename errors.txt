@@ -1,0 +1,4 @@
+103:Checking the license for package CMake 3.22.1 in /usr/local/lib/android/sdk/licenses
+107:Installing CMake 3.22.1 in /usr/local/lib/android/sdk/cmake/3.22.1
+112:FAILURE: Build failed with an exception.
+114:* What went wrong:
