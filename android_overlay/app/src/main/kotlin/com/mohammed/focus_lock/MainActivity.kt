@@ -215,8 +215,37 @@ class MainActivity : FlutterFragmentActivity() {
     // Re-enter lock whenever the app comes back during an active session
     override fun onResume() {
         super.onResume()
+        startFloatWatch()
         applyOverlayBlock()
         if (sessionActive()) enforceLock()
+    }
+
+    // Watches (every second) whether OUR window became a floating / split-screen window.
+    // If so the task is removed; LockService notices our window is gone and re-opens it full screen.
+    private val floatHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var watching = false
+    private val floatCheck = object : Runnable {
+        override fun run() {
+            if (sessionActive() && Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode) {
+                val now = System.currentTimeMillis()
+                if (now - prefs.getLong("fixAt", 0L) > 3000) { // guard against loops
+                    prefs.edit().putLong("fixAt", now).apply()
+                    finishAndRemoveTask()
+                    return
+                }
+            }
+            floatHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun startFloatWatch() {
+        if (!watching) { watching = true; floatHandler.postDelayed(floatCheck, 1000) }
+    }
+
+    override fun onDestroy() {
+        floatHandler.removeCallbacks(floatCheck)
+        watching = false
+        super.onDestroy()
     }
 
     private fun enforceLock() {

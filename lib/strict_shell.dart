@@ -256,7 +256,7 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: land
+        body: _guard(land
             ? Stack(children: [
                 Positioned.fill(child: child),
                 Positioned(top: 4, left: 8, child: SafeArea(child: _compactBar())),
@@ -266,10 +266,25 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
                   _fullHeader(progress),
                   Expanded(child: child),
                 ]),
-              ),
+              )),
       ),
     );
   }
+
+  // While our window is floating / unfocused the content is hidden behind a black cover
+  Widget _guard(Widget w) => Stack(children: [
+        Positioned.fill(child: Offstage(offstage: !_focus, child: w)),
+        if (!_focus)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: Colors.black,
+              child: Center(
+                child: Text('أغلق النوافذ العائمة لمتابعة المشاهدة',
+                    style: TextStyle(color: Colors.white70, fontSize: 18)),
+              ),
+            ),
+          ),
+      ]);
 }
 
 // ---- Play state of a <video> inside a web page (YouTube / Moodle) ----
