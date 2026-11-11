@@ -36,7 +36,12 @@ class LockService : AccessibilityService() {
         if (prefs.getLong("end", 0L) <= System.currentTimeMillis()) return // no active session
         val pkg = e?.packageName?.toString() ?: return
         if (pkg == packageName || pkg in allowed) return
-        // Bring our activity back to the front
+        // Quick settings / notification shade: close it first (Android 12+)
+        if (pkg == "com.android.systemui" && android.os.Build.VERSION.SDK_INT >= 31) {
+            performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+        }
+        // Bring our activity back to the front (also covers floating windows,
+        // split-screen partners and picture-in-picture from other apps)
         startActivity(
             Intent(this, MainActivity::class.java).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
