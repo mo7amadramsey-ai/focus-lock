@@ -75,6 +75,12 @@ class _StrictShellState extends State<StrictShell> {
                 child: Text('الوضع الصارم - المتبقي ${_fmt(left)}',
                     style: const TextStyle(color: Colors.white70, fontSize: 18)),
               ),
+              // Emergency calling only: opens dialer / keypad / contacts
+              TextButton.icon(
+                onPressed: () => ch.invokeMethod('openDialer'),
+                icon: const Icon(Icons.dialpad),
+                label: const Text('اتصال'),
+              ),
               if (ringing)
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),

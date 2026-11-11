@@ -82,6 +82,12 @@ class MainActivity : FlutterActivity() {
                     startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     result.success(true)
                 }
+                // Opens the phone's dialer (keypad + contacts) for emergency calls
+                "openDialer" -> {
+                    startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    result.success(true)
+                }
                 "isDeviceOwner" -> {
                     val dpm = getSystemService(DevicePolicyManager::class.java)
                     result.success(dpm.isDeviceOwnerApp(packageName))
@@ -100,14 +106,17 @@ class MainActivity : FlutterActivity() {
     private fun enforceLock() {
         val dpm = getSystemService(DevicePolicyManager::class.java)
         if (dpm.isDeviceOwnerApp(packageName)) {
-            // Device Owner = real kiosk: no dialog, no exit gesture, no power menu
+            // Device Owner = real kiosk. The dialer is whitelisted so calls still work.
             val admin = ComponentName(this, FocusAdmin::class.java)
-            dpm.setLockTaskPackages(admin, arrayOf(packageName))
+            val dialer = try { getSystemService(TelecomManager::class.java).defaultDialerPackage } catch (e: Exception) { null }
+            dpm.setLockTaskPackages(admin, listOfNotNull(packageName, dialer).toTypedArray())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 dpm.setLockTaskFeatures(admin, 0) // disable every system UI feature
             }
+            try { startLockTask() } catch (e: Exception) {}
         }
-        try { startLockTask() } catch (e: Exception) {}
+        // Not Device Owner: plain screen pinning would block the dialer,
+        // so the accessibility service (LockService) does the enforcing instead.
     }
 
     private fun hasPerm(p: String) =
