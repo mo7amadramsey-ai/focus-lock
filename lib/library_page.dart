@@ -76,6 +76,23 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Future<void> rename(FileSystemEntity e) async {
+    if (e is File) {
+      // Videos: name + number. A number that is already used shifts that video and the next ones by one.
+      final nm = nameOf(e);
+      final r = await askNameNumber(context, title: 'الاسم والرقم', initialName: titlePart(nm), initialNumber: numberOf(nm));
+      if (r == null || (r.name.isEmpty && r.number == null)) return;
+      if (r.number != null && r.number != numberOf(nm)) await insertAtNumber(dir!, r.number!, exceptPath: e.path);
+      final to = '${e.parent.path}/${numberedName(r.number, r.name, extOfName(nm))}';
+      if (to != e.path) {
+        if (File(to).existsSync()) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يوجد ملف بهذا الاسم')));
+          return;
+        }
+        await renameKeepPos(e, to);
+      }
+      _load();
+      return;
+    }
     final n = await askName(context, 'الاسم الجديد');
     if (n == null) return;
     final ext = e is File && nameOf(e).contains('.') ? '.${nameOf(e).split('.').last}' : '';

@@ -97,7 +97,15 @@ class _BrowserPageState extends State<BrowserPage> {
   Future<void> download() async {
     final dir = await chooseFolder(context); // subject folder
     if (dir == null) return;
-    final started = dl.start(url, dir);
+    // Ask for the name + number (the next free number is suggested: first video = 001)
+    final pageTitle = ((await w.getTitle()) ?? '').replaceAll(RegExp(r'\s*-\s*YouTube$'), '').trim();
+    if (!mounted) return;
+    final r = await askNameNumber(context,
+        title: 'اسم الفيديو ورقمه',
+        initialName: safeName(pageTitle),
+        initialNumber: nextNumber(dir, pending: dl.pendingNumbers(dir)));
+    if (r == null || !mounted) return;
+    final started = dl.start(url, dir, name: r.name.isEmpty ? null : r.name, number: r.number);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(started ? 'أُضيف إلى التحميلات' : 'هذا الفيديو يُحمَّل إلى هذا المجلد بالفعل'),

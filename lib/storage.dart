@@ -258,3 +258,116 @@ Future<SortMode?> pickSort(BuildContext c, SortMode current) => showModalBottomS
         ]),
       ),
     );
+
+// ---- Numbered names: "001 - Title.mp4" ----
+final _numRe = RegExp(r'^(\d{1,4})(?:\s*-\s*|$)');
+final _extRe = RegExp(r'\.[A-Za-z0-9]+$');
+
+String stemOf(String name) => name.replaceAll(_extRe, '');
+String extOfName(String name) => _extRe.firstMatch(name)?[0] ?? '';
+int? numberOf(String name) {
+  final m = _numRe.firstMatch(stemOf(name));
+  return m == null ? null : int.parse(m[1]!);
+}
+
+String titlePart(String name) => stemOf(name).replaceFirst(_numRe, '');
+String pad3(int n) => n.toString().padLeft(3, '0');
+String numberedName(int? n, String title, String ext) {
+  if (n == null) return '$title$ext';
+  return title.isEmpty ? '${pad3(n)}$ext' : '${pad3(n)} - $title$ext';
+}
+
+// Next free number in a folder (highest existing number + 1). `pending` = numbers already reserved by running downloads.
+int nextNumber(Directory dir, {Iterable<int> pending = const []}) {
+  var m = 0;
+  try {
+    for (final f in dir.listSync().whereType<File>()) {
+      if (!isVideo(f.path)) continue;
+      final k = numberOf(entityName(f));
+      if (k != null && k > m) m = k;
+    }
+  } catch (_) {}
+  for (final k in pending) {
+    if (k > m) m = k;
+  }
+  return m + 1;
+}
+
+// Rename a file and keep its "where I stopped" position
+Future<void> renameKeepPos(File f, String to) async {
+  await loadPos(f.path);
+  await f.rename(to);
+  final p = _pos.remove(f.path);
+  if (p != null) _pos[to] = p;
+  await flushPos();
+}
+
+/// Makes room for number [n]: if a video already has it, that video and the ones right after it
+/// (n+1, n+2, ... as long as there is no gap) each move up by ONE. Nothing else is touched.
+/// 001 002 003 004 005 + new 001  ->  old ones become 002 003 004 005 006.
+Future<void> insertAtNumber(Directory dir, int n, {String? exceptPath}) async {
+  final byNum = <int, List<File>>{};
+  for (final f in dir.listSync().whereType<File>()) {
+    if (!isVideo(f.path) || f.path == exceptPath) continue;
+    final k = numberOf(entityName(f));
+    if (k != null) byNum.putIfAbsent(k, () => []).add(f);
+  }
+  if (!byNum.containsKey(n)) return;
+  var end = n;
+  while (byNum.containsKey(end + 1)) {
+    end++;
+  }
+  for (var k = end; k >= n; k--) {
+    // from the highest down, so a name is never taken twice
+    for (final f in byNum[k]!) {
+      final name = entityName(f);
+      await renameKeepPos(f, '${dir.path}/${numberedName(k + 1, titlePart(name), extOfName(name))}');
+    }
+  }
+}
+
+// Dialog: video name + number (number optional)
+Future<({String name, int? number})?> askNameNumber(BuildContext c,
+    {required String title, required String initialName, int? initialNumber}) {
+  final nameC = TextEditingController(text: initialName);
+  final numC = TextEditingController(text: initialNumber?.toString() ?? '');
+  return showDialog<({String name, int? number})>(
+    context: c,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
+          SizedBox(
+            width: 80,
+            child: TextField(
+              controller: numC,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'الرقم'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(controller: nameC, autofocus: true, decoration: const InputDecoration(labelText: 'الاسم')),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        const Text(
+          'إن كان الرقم مستخدماً، يُزاح ذلك الفيديو وما بعده خطوة واحدة (001 القديم يصير 002 وهكذا).',
+          style: TextStyle(fontSize: 12, color: Colors.white60),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+        FilledButton(
+          onPressed: () {
+            final nm = safeName(nameC.text);
+            final n = int.tryParse(numC.text.trim());
+            if (nm.isEmpty && n == null) return;
+            Navigator.pop(ctx, (name: nm, number: n));
+          },
+          child: const Text('موافق'),
+        ),
+      ],
+    ),
+  );
+}

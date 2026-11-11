@@ -14,11 +14,13 @@ class DlTask {
   final String url;
   final Directory dir;
   String title;
+  final String? customName; // name chosen by the user (null = YouTube title)
+  final int? number; // 001, 002... (null = no number)
   DlState state = DlState.preparing;
   int got = 0, total = 0;
   String? error;
   bool cancelRequested = false;
-  DlTask(this.id, this.url, this.dir, this.title);
+  DlTask(this.id, this.url, this.dir, this.title, {this.customName, this.number});
 
   bool get active => state == DlState.preparing || state == DlState.running;
   double? get progress => total > 0 ? (got / total).clamp(0.0, 1.0).toDouble() : null;
@@ -33,11 +35,15 @@ class DownloadManager extends ChangeNotifier {
   int get activeCount => tasks.where((t) => t.active).length;
 
   /// Returns false if this video is already downloading to the same folder.
-  bool start(String url, Directory dir) {
+  // Numbers reserved by running downloads of a folder (so the suggested next number never repeats)
+  List<int> pendingNumbers(Directory dir) =>
+      [for (final t in tasks) if (t.active && t.dir.path == dir.path && t.number != null) t.number!];
+
+  bool start(String url, Directory dir, {String? name, int? number}) {
     final vid = VideoId.parseVideoId(url);
     final dup = tasks.any((t) => t.active && t.dir.path == dir.path && VideoId.parseVideoId(t.url) == vid);
     if (dup) return false;
-    final t = DlTask(_next++, url, dir, 'جاري التحضير...');
+    final t = DlTask(_next++, url, dir, name ?? 'جاري التحضير...', customName: name, number: number);
     tasks.insert(0, t); // newest on top
     notifyListeners();
     _run(t);
@@ -51,7 +57,7 @@ class DownloadManager extends ChangeNotifier {
 
   void retry(DlTask t) {
     tasks.remove(t);
-    start(t.url, t.dir);
+    start(t.url, t.dir, name: t.customName, number: t.number);
   }
 
   void remove(DlTask t) {
@@ -72,7 +78,7 @@ class DownloadManager extends ChangeNotifier {
     try {
       final id = VideoId(t.url);
       final video = await yt.videos.get(id);
-      t.title = video.title;
+      if (t.customName == null) t.title = video.title;
       notifyListeners();
       if (t.cancelRequested) throw _Cancelled();
       final manifest = await yt.videos.streamsClient.getManifest(id);
@@ -81,13 +87,9 @@ class DownloadManager extends ChangeNotifier {
       t.state = DlState.running;
       notifyListeners();
 
-      // Never overwrite an existing video: add (2), (3)...
-      final safe = safeName(video.title);
-      var target = File('${t.dir.path}/$safe.mp4');
-      for (var n = 2; target.existsSync(); n++) {
-        target = File('${t.dir.path}/$safe ($n).mp4');
-      }
-      part = File('${target.path}.part'); // not listed as a video until finished
+      // Temporary file (not listed as a video until finished)
+      final safe = safeName(t.customName ?? video.title);
+      part = File('${t.dir.path}/$safe.${t.id}.mp4.part');
       sink = part.openWrite();
 
       final clock = Stopwatch()..start();
@@ -103,6 +105,12 @@ class DownloadManager extends ChangeNotifier {
       await sink.flush();
       await sink.close();
       sink = null;
+      // Finished: make room for the chosen number (shift old videos by one), then give the final name
+      if (t.number != null) await insertAtNumber(t.dir, t.number!);
+      var target = File('${t.dir.path}/${numberedName(t.number, safe, '.mp4')}');
+      for (var n = 2; target.existsSync(); n++) {
+        target = File('${t.dir.path}/${numberedName(t.number, '$safe ($n)', '.mp4')}');
+      }
       await part.rename(target.path);
       t.state = DlState.done;
     } on _Cancelled {
