@@ -30,6 +30,12 @@ Future<bool> ensureLockReady(BuildContext c) async {
   return false;
 }
 
+/// The lock never lasts more than one hour (a 3-hour video only locks for 1 hour; renew if you want more)
+const kMaxLockMs = 60 * 60 * 1000;
+
+/// Lock length = video length + extra minutes, capped at one hour
+int lockMs(Duration base, int extraMin) => (base.inMilliseconds + extraMin * 60000).clamp(1, kMaxLockMs).toInt();
+
 String fmtMinutes(int m) {
   if (m < 60) return '$m دقيقة';
   final h = m ~/ 60, r = m % 60;
@@ -47,14 +53,14 @@ Future<int?> askMinutes(BuildContext c) {
         controller: t,
         autofocus: true,
         keyboardType: TextInputType.number,
-        decoration: const InputDecoration(hintText: 'مثال: 45'),
+        decoration: const InputDecoration(hintText: 'مثال: 45 (الحد الأقصى 60)'),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
         FilledButton(
           onPressed: () {
             final n = int.tryParse(t.text.trim());
-            Navigator.pop(ctx, n != null && n > 0 && n <= 600 ? n : null);
+            Navigator.pop(ctx, n != null && n > 0 && n <= 60 ? n : null);
           },
           child: const Text('موافق'),
         ),
@@ -81,14 +87,14 @@ Future<int?> confirmStrict(BuildContext c, Duration base) {
     isScrollControlled: true,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) {
-        final total = base.inMinutes + (base.inSeconds % 60 > 0 ? 1 : 0) + extra;
+        final total = (base.inMinutes + (base.inSeconds % 60 > 0 ? 1 : 0) + extra).clamp(1, 60).toInt();
         return Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _sheetGrip(),
             const Text('بدء الوضع الصارم', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            Text('مدة الفيديو ${fmtMinutes(base.inMinutes)}. يُقفل الهاتف بهذه المدة على الأقل، ويمكنك إضافة وقت إضافي للمراجعة والتوقف.',
+            Text('مدة الفيديو ${fmtMinutes(base.inMinutes)}. يُحسب وقت القفل فقط أثناء تشغيل الفيديو: إذا أوقفته أو أُغلقت الشاشة يتوقف العدّاد. الحد الأقصى للقفل ساعة واحدة، وتستطيع تجديدها بعد ذلك.',
                 style: const TextStyle(color: Colors.white60, height: 1.5)),
             const SizedBox(height: 16),
             const Text('وقت إضافي', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -155,12 +161,12 @@ Future<int?> pickExtension(BuildContext c, {required bool expired}) {
         Text(
           expired
               ? 'لم يُغلق الفيديو. هل تريد تمديد فترة التركيز لتكمل المشاهدة؟'
-              : 'أضف وقتاً إلى القفل الحالي. التمديد فقط، ولا يمكن تقصير القفل.',
+              : 'أضف وقتاً إلى القفل الحالي (لا يتجاوز المتبقي ساعة واحدة). التمديد فقط، ولا يمكن تقصير القفل.',
           style: const TextStyle(color: Colors.white60, height: 1.5),
         ),
         const SizedBox(height: 16),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final m in [15, 30, 60, 90])
+          for (final m in [15, 30, 45, 60])
             ActionChip(label: Text('+${fmtMinutes(m)}'), onPressed: () => Navigator.pop(ctx, m)),
           ActionChip(
             avatar: const Icon(Icons.edit, size: 16),

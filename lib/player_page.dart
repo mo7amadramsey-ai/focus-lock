@@ -23,14 +23,14 @@ String titleOf(String path) => baseName(path).replaceAll(RegExp(r'\.[A-Za-z0-9]+
 const _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
 /// Local video player.
-/// endMillis == null -> normal playback (up-next list, auto-play next video).
-/// endMillis != null -> strict mode (timer = video length + extra time).
+/// leftMs == null -> normal playback (up-next list, auto-play next video).
+/// leftMs != null -> strict mode (timer counts only while playing, max one hour).
 /// Gestures: tap = controls, double tap sides = -/+10s, hold = 2x speed,
 /// swipe up/down on the left = brightness, on the right = volume.
 class PlayerPage extends StatefulWidget {
   final String path;
-  final int? endMillis;
-  const PlayerPage({super.key, required this.path, this.endMillis});
+  final int? leftMs; // null = normal mode; otherwise strict mode with this much time left
+  const PlayerPage({super.key, required this.path, this.leftMs});
   @override
   State<PlayerPage> createState() => _PlayerPageState();
 }
@@ -41,6 +41,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final Directory folder = File(widget.path).parent; // switching is limited to THIS folder
   final _vKey = GlobalKey(); // keeps the video alive when the phone rotates
   bool _userPaused = false, switching = false;
+  final playingN = ValueNotifier<bool>(false); // feeds the strict timer: counts only while playing
   bool ready = false, showCtl = true, fullscreen = false, leaving = false, toStrict = false, loop = false;
   String? error;
   Timer? _hide, _flashT;
@@ -53,7 +54,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   List<File> siblings = [];
   SortMode sortMode = SortMode.nameAsc;
 
-  bool get strict => widget.endMillis != null;
+  bool get strict => widget.leftMs != null;
   File get me => File(path);
 
   int get _idx => siblings.indexWhere((f) => f.path == path);
@@ -165,6 +166,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    playingN.dispose();
     _hide?.cancel();
     _flashT?.cancel();
     if (ready) setPos(path, v.value.position.inMilliseconds);
@@ -180,6 +182,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void _onTick() {
     final val = v.value;
     if (!val.isInitialized) return;
+    playingN.value = val.isPlaying && !val.isBuffering && !val.isCompleted;
     // remember the position every 5 seconds
     final s = val.position.inSeconds;
     if (s % 5 == 0 && s != _lastSaved) {
@@ -314,11 +317,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!mounted) return;
     final extra = await confirmStrict(context, v.value.duration);
     if (extra == null) return;
-    final end = DateTime.now().add(v.value.duration + Duration(minutes: extra)).millisecondsSinceEpoch;
-    await ch.invokeMethod('startLock', {'end': end, 'type': 'local', 'target': path});
+    final left = lockMs(v.value.duration, extra); // never more than one hour
+    await ch.invokeMethod('startLock', {'left': left, 'type': 'local', 'target': path});
     if (!mounted) return;
     toStrict = true;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerPage(path: path, endMillis: end)));
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerPage(path: path, leftMs: left)));
   }
 
   // ---------- UI pieces ----------
@@ -605,7 +608,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             AspectRatio(aspectRatio: 16 / 9, child: video),
             Expanded(child: _info()),
           ]);
-    if (strict) return StrictShell(endMillis: widget.endMillis!, child: body);
+    if (strict) return StrictShell(leftMs: widget.leftMs!, playing: playingN, child: body);
     return PopScope(
       canPop: !fs,
       onPopInvokedWithResult: (didPop, _) {

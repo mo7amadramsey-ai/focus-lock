@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <!-- Public FocusLock folder: Android 11+ needs "All files access", Android 10 and older the normal storage permission -->
+    <!-- Hides other apps' floating windows over this app during strict mode (Android 12+) -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS"/>
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>

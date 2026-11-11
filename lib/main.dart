@@ -55,13 +55,13 @@ class _BootState extends State<Boot> {
     if (!mounted) return;
     Widget next = const Home();
     if (s != null) {
-      final end = (s['end'] as num).toInt();
+      final left = (s['left'] as num).toInt();
       final target = s['target'] as String;
       next = s['type'] == 'web'
-          ? StrictWebPage(url: target, endMillis: end)
+          ? StrictWebPage(url: target, leftMs: left)
           : s['type'] == 'moodle'
-              ? StrictMoodlePage(url: target, endMillis: end)
-              : PlayerPage(path: target, endMillis: end);
+              ? StrictMoodlePage(url: target, leftMs: left)
+              : PlayerPage(path: target, leftMs: left);
     }
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => next));
   }

@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:ui' show FontFeature;
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'channel.dart';
 import 'lock_setup.dart';
 import 'nav.dart';
@@ -10,55 +12,82 @@ import 'theme.dart';
 
 /// Wraps any content in the strict mode:
 /// - no back button / exit while the timer runs
-/// - the countdown uses the REAL clock, so seeking or pausing never changes it
+/// - the countdown only runs while the video is PLAYING and the app is on screen:
+///   paused video, screen off or app in background = the timer stops
+/// - the remaining time is saved natively, so it survives a restart / reboot
+/// - the lock is never longer than one hour
 /// - when time is up the content is NOT closed: it offers to extend the focus time
 /// - the time can be extended at any moment (never shortened)
 class StrictShell extends StatefulWidget {
-  final int endMillis;
+  final int leftMs; // time still to be watched
   final Widget child;
-  const StrictShell({super.key, required this.endMillis, required this.child});
+  final ValueListenable<bool>? playing; // null = always counts (while the app is on screen)
+  const StrictShell({super.key, required this.leftMs, required this.child, this.playing});
   @override
   State<StrictShell> createState() => _StrictShellState();
 }
 
-class _StrictShellState extends State<StrictShell> {
+class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
   Timer? _t;
-  late int end = widget.endMillis;
-  late int _totalMs = (end - DateTime.now().millisecondsSinceEpoch).clamp(1, 1 << 40).toInt();
-  Duration left = Duration.zero;
+  late int _leftMs = widget.leftMs.clamp(0, kMaxLockMs).toInt();
+  late int _totalMs = _leftMs < 1 ? 1 : _leftMs;
+  Duration get left => Duration(milliseconds: _leftMs);
+  DateTime _last = DateTime.now();
+  int _n = 0;
+  bool _fg = true, counting = true;
+  bool ringing = false, expired = false, sheetOpen = false, unlocked = false;
   // Same key in portrait and landscape: the video is MOVED, never rebuilt, when the phone rotates
   final _childKey = GlobalKey();
-  bool ringing = false, expired = false, sheetOpen = false, unlocked = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     strictActive.value = true;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WakelockPlus.enable();
     ch.setMethodCallHandler((call) async {
       if (call.method == 'callState' && mounted) setState(() => ringing = call.arguments == 1);
     });
-    _tick();
     _t = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
+  // App on screen (resumed) = counts; screen off / background / dialogs over the app = does not
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    _fg = s == AppLifecycleState.resumed;
+    _last = DateTime.now();
+    if (!_fg) _save();
+  }
+
+  // Remaining time is stored natively: a restart or reboot resumes with exactly what is left
+  void _save() {
+    if (unlocked || expired) return;
+    ch.invokeMethod('setLeft', {'left': _leftMs});
+  }
+
   void _tick() {
-    if (unlocked || !mounted) return;
-    final d = Duration(milliseconds: end - DateTime.now().millisecondsSinceEpoch);
-    if (d <= Duration.zero) {
-      if (!expired) {
-        _expire();
-      }
-    } else {
-      setState(() => left = d);
+    final now = DateTime.now();
+    final dt = now.difference(_last).inMilliseconds.clamp(0, 2000).toInt(); // long gaps never count
+    _last = now;
+    if (unlocked || expired || !mounted) return;
+    final was = counting;
+    counting = _fg && (widget.playing?.value ?? true);
+    if (counting) _leftMs -= dt;
+    if (_leftMs <= 0) {
+      _leftMs = 0;
+      _expire();
+      return;
     }
+    setState(() {});
+    _n++;
+    if (_n % 3 == 0 || (was && !counting)) _save();
   }
 
   // Time is up: release the kiosk but KEEP the video, and offer more time
   Future<void> _expire() async {
     expired = true;
-    left = Duration.zero;
+    _leftMs = 0;
     HapticFeedback.heavyImpact();
     await ch.invokeMethod('releaseLock');
     if (!mounted) return;
@@ -78,16 +107,20 @@ class _StrictShellState extends State<StrictShell> {
       setState(() => unlocked = true);
       return;
     }
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final newEnd = (expired ? now : end) + r * 60000;
-    await ch.invokeMethod('extendLock', {'end': newEnd});
+    // never more than one hour in total
+    final newLeft = ((expired ? 0 : _leftMs) + r * 60000).clamp(0, kMaxLockMs).toInt();
+    if (!expired && newLeft <= _leftMs) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الحد الأقصى للقفل ساعة واحدة')));
+      return;
+    }
+    await ch.invokeMethod('extendLock', {'left': newLeft});
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setState(() {
-      end = newEnd;
-      _totalMs = (newEnd - now).clamp(1, 1 << 40).toInt();
+      _leftMs = newLeft;
+      _totalMs = newLeft < 1 ? 1 : newLeft;
       expired = false;
     });
-    _tick();
+    _last = DateTime.now();
   }
 
   Future<void> _finish() async {
@@ -102,6 +135,7 @@ class _StrictShellState extends State<StrictShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _t?.cancel();
     strictActive.value = false;
     super.dispose();
@@ -170,7 +204,7 @@ class _StrictShellState extends State<StrictShell> {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-              unlocked ? 'بدون قفل' : (expired ? 'انتهى وقت التركيز' : 'الوضع الصارم'),
+              unlocked ? 'بدون قفل' : (expired ? 'انتهى وقت التركيز' : (counting ? 'الوضع الصارم' : 'متوقف — شغّل الفيديو')),
               style: const TextStyle(color: Colors.white60, fontSize: 13),
             ),
             Text(
@@ -190,7 +224,7 @@ class _StrictShellState extends State<StrictShell> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(color: Colors.black.withOpacity(.65), borderRadius: BorderRadius.circular(24)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(ended ? Icons.lock_open : Icons.lock, size: 16, color: ended ? Colors.greenAccent : kAccent),
+        Icon(ended ? Icons.lock_open : (counting ? Icons.lock : Icons.pause_circle), size: 16, color: ended ? Colors.greenAccent : (counting ? kAccent : Colors.orangeAccent)),
         const SizedBox(width: 6),
         Text(ended ? 'انتهى' : _fmt(left),
             style: const TextStyle(fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()])),
@@ -235,3 +269,19 @@ class _StrictShellState extends State<StrictShell> {
     );
   }
 }
+
+// ---- Play state of a <video> inside a web page (YouTube / Moodle) ----
+// 0 = paused / ended / buffering, 1 = playing, 2 = no <video> in the main page (e.g. a player inside an iframe):
+// then we cannot know, so the time simply counts (never leaves you stuck).
+const _pollJs = "(function(){var vs=document.querySelectorAll('video');if(!vs.length)return 2;"
+    "for(var i=0;i<vs.length;i++){var v=vs[i];if(!v.paused&&!v.ended&&v.readyState>2)return 1;}return 0;})()";
+
+/// Updates [out] every second with whether the page's video is playing. Cancel the returned timer in dispose.
+Timer startPlayPoll(WebViewController w, ValueNotifier<bool> out) => Timer.periodic(const Duration(seconds: 1), (_) async {
+      try {
+        final r = await w.runJavaScriptReturningResult(_pollJs);
+        out.value = (int.tryParse(r.toString().replaceAll('"', '')) ?? 2) != 0;
+      } catch (_) {
+        out.value = true;
+      }
+    });

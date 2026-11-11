@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -86,11 +87,11 @@ class _BrowserPageState extends State<BrowserPage> {
     // Lock to this exact video
     final id = VideoId.parseVideoId(url);
     final target = 'https://m.youtube.com/watch?v=$id';
-    final end = DateTime.now().add(d + Duration(minutes: extra)).millisecondsSinceEpoch;
-    await ch.invokeMethod('startLock', {'end': end, 'type': 'web', 'target': target});
+    final left = lockMs(d, extra); // never more than one hour
+    await ch.invokeMethod('startLock', {'left': left, 'type': 'web', 'target': target});
     if (!mounted) return;
     Navigator.pushReplacement(
-        context, MaterialPageRoute(builder: (_) => StrictWebPage(url: target, endMillis: end)));
+        context, MaterialPageRoute(builder: (_) => StrictWebPage(url: target, leftMs: left)));
   }
 
   // Add the current video to the downloads list (several can run at once)
@@ -166,8 +167,8 @@ class _BrowserPageState extends State<BrowserPage> {
 /// Strict YouTube page: locked to ONE video. Cannot open anything else.
 class StrictWebPage extends StatefulWidget {
   final String url;
-  final int endMillis;
-  const StrictWebPage({super.key, required this.url, required this.endMillis});
+  final int leftMs;
+  const StrictWebPage({super.key, required this.url, required this.leftMs});
   @override
   State<StrictWebPage> createState() => _StrictWebPageState();
 }
@@ -175,6 +176,8 @@ class StrictWebPage extends StatefulWidget {
 class _StrictWebPageState extends State<StrictWebPage> {
   late final WebViewController w;
   late final String id = VideoId.parseVideoId(widget.url)!;
+  final playing = ValueNotifier<bool>(true);
+  Timer? _poll;
 
   // Injected into the page: hides navigation UI, kills link clicks,
   // and forces the page back to the locked video if YouTube navigates away
@@ -210,9 +213,16 @@ class _StrictWebPageState extends State<StrictWebPage> {
         onPageFinished: (_) => w.runJavaScript(lockJs),
       ))
       ..loadRequest(Uri.parse(widget.url));
+    _poll = startPlayPoll(w, playing);
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext c) =>
-      StrictShell(endMillis: widget.endMillis, child: FsWebView(w, strict: true));
+      StrictShell(leftMs: widget.leftMs, playing: playing, child: FsWebView(w, strict: true));
 }

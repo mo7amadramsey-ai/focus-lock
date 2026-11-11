@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -369,11 +370,11 @@ class _MoodlePageState extends State<MoodlePage> {
     final extra = await confirmStrict(context, d);
     if (extra == null) return;
     final target = url.split('#').first;
-    final end = DateTime.now().add(d + Duration(minutes: extra)).millisecondsSinceEpoch;
-    await ch.invokeMethod('startLock', {'end': end, 'type': 'moodle', 'target': target});
+    final left = lockMs(d, extra); // never more than one hour
+    await ch.invokeMethod('startLock', {'left': left, 'type': 'moodle', 'target': target});
     if (!mounted) return;
     Navigator.pushReplacement(
-        context, MaterialPageRoute(builder: (_) => StrictMoodlePage(url: target, endMillis: end)));
+        context, MaterialPageRoute(builder: (_) => StrictMoodlePage(url: target, leftMs: left)));
   }
 
   @override
@@ -432,14 +433,16 @@ class _MoodlePageState extends State<MoodlePage> {
 /// Strict mode locked to ONE Moodle page (the video page)
 class StrictMoodlePage extends StatefulWidget {
   final String url;
-  final int endMillis;
-  const StrictMoodlePage({super.key, required this.url, required this.endMillis});
+  final int leftMs;
+  const StrictMoodlePage({super.key, required this.url, required this.leftMs});
   @override
   State<StrictMoodlePage> createState() => _StrictMoodlePageState();
 }
 
 class _StrictMoodlePageState extends State<StrictMoodlePage> {
   late final WebViewController w;
+  final playing = ValueNotifier<bool>(true);
+  Timer? _poll;
 
   // Kills link clicks and forces the page back if anything navigates away
   String get lockJs => '''
@@ -470,9 +473,16 @@ class _StrictMoodlePageState extends State<StrictMoodlePage> {
         onPageFinished: (_) => w.runJavaScript(lockJs),
       ))
       ..loadRequest(Uri.parse(widget.url));
+    _poll = startPlayPoll(w, playing);
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext c) =>
-      StrictShell(endMillis: widget.endMillis, child: FsWebView(w, strict: true));
+      StrictShell(leftMs: widget.leftMs, playing: playing, child: FsWebView(w, strict: true));
 }

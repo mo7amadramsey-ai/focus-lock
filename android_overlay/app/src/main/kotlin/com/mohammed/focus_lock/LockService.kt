@@ -8,7 +8,8 @@ import android.view.accessibility.AccessibilityEvent
 
 // During an active strict session, any window that is not ours (home, recents,
 // settings, other apps, notification shade, power menu) pulls the app back to the front.
-// It checks the saved end time itself, so it always stops when the timer ends.
+// It checks the saved time-left itself, so it always stops when the timer ends
+// (the timer only counts down while the video is playing).
 class LockService : AccessibilityService() {
 
     // Only calling is allowed: dialer (keypad), contacts, and the in-call screen
@@ -35,7 +36,7 @@ class LockService : AccessibilityService() {
 
     override fun onAccessibilityEvent(e: AccessibilityEvent?) {
         val prefs = getSharedPreferences("strict", MODE_PRIVATE)
-        if (prefs.getLong("end", 0L) <= System.currentTimeMillis()) return // no active session
+        if (prefs.getLong("left", 0L) <= 0L) return // no active session (time left = 0)
         val pkg = e?.packageName?.toString() ?: return
         if (pkg == packageName || pkg in allowed) return
         // Quick settings / notification shade: close it first (Android 12+)

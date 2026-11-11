@@ -27,30 +27,47 @@ class MainActivity : FlutterFragmentActivity() {
     // The session lives in native storage so it survives app kill / reboot
     private val prefs by lazy { getSharedPreferences("strict", MODE_PRIVATE) }
 
-    private fun endMillis() = prefs.getLong("end", 0L)
-    private fun sessionActive() = endMillis() > System.currentTimeMillis()
+    // The session stores the TIME LEFT (it only counts down while the video plays), not an end time
+    private fun leftMs() = prefs.getLong("left", 0L)
+    private fun sessionActive() = leftMs() > 0L
+
+    // Android 12+: while a session is active, other apps' floating (overlay) windows are hidden over our app
+    private fun applyOverlayBlock() {
+        if (Build.VERSION.SDK_INT >= 31) {
+            try { window.setHideOverlayWindows(sessionActive()) } catch (e: Exception) {}
+        }
+    }
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
         channel = MethodChannel(engine.dartExecutor.binaryMessenger, "focus_lock")
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
-                // args: end (epoch ms), type ("web"/"local"), target (url or file path)
+                // args: left (ms of watching still required, max 1 hour), type ("web"/"local"/"moodle"), target (url or file path)
                 "startLock" -> {
                     prefs.edit()
-                        .putLong("end", (call.argument<Number>("end"))!!.toLong())
+                        .putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(1L, 3600000L))
                         .putString("type", call.argument<String>("type"))
                         .putString("target", call.argument<String>("target"))
                         .apply()
                     askPermissions()
                     enforceLock()
+                    applyOverlayBlock()
                     listenCalls()
                     result.success(true)
                 }
                 // Extend the running (or just-expired) session: new end time, lock again
                 "extendLock" -> {
-                    prefs.edit().putLong("end", (call.argument<Number>("end"))!!.toLong()).apply()
+                    prefs.edit().putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(1L, 3600000L)).apply()
                     enforceLock()
+                    applyOverlayBlock()
+                    result.success(true)
+                }
+                // Dart reports the remaining time every few seconds (and whenever counting stops)
+                "setLeft" -> {
+                    if (prefs.contains("type")) {
+                        prefs.edit().putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(0L, 3600000L)).apply()
+                    }
                     result.success(true)
                 }
                 // Strict mode switched to another video of the same folder: remember it for resume
@@ -60,6 +77,8 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 // Timer ended: release kiosk mode but keep the session data so it can be extended
                 "releaseLock" -> {
+                    prefs.edit().putLong("left", 0L).apply()
+                    applyOverlayBlock()
                     try { stopLockTask() } catch (e: Exception) {}
                     result.success(true)
                 }
@@ -71,6 +90,7 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "stopLock" -> {
                     prefs.edit().clear().apply()
+                    applyOverlayBlock()
                     try { stopLockTask() } catch (e: Exception) {}
                     result.success(true)
                 }
@@ -79,7 +99,7 @@ class MainActivity : FlutterFragmentActivity() {
                     if (sessionActive()) {
                         listenCalls()
                         result.success(mapOf(
-                            "end" to endMillis(),
+                            "left" to leftMs(),
                             "type" to prefs.getString("type", ""),
                             "target" to prefs.getString("target", "")
                         ))
@@ -189,6 +209,7 @@ class MainActivity : FlutterFragmentActivity() {
     // Re-enter lock whenever the app comes back during an active session
     override fun onResume() {
         super.onResume()
+        applyOverlayBlock()
         if (sessionActive()) enforceLock()
     }
 
