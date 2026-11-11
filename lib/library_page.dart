@@ -85,7 +85,7 @@ class _LibraryPageState extends State<LibraryPage> {
                 for (final e in items)
                   ListTile(
                     leading: Icon(e is Directory ? Icons.folder : Icons.play_circle),
-                    title: Text(nameOf(e).replaceAll(RegExp(r'\.[A-Za-z0-9]+$'), e is File ? '' : '$0')),
+                    title: Text(e is File ? nameOf(e).replaceAll(RegExp(r'\.[A-Za-z0-9]+$'), '') : nameOf(e)),
                     onTap: () async {
                       if (e is Directory) {
                         await Navigator.push(c, MaterialPageRoute(builder: (_) => LibraryPage(dir: e)));
