@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
 
     <queries>
+        <package android:name="com.google.android.apps.docs"/>
         <intent><action android:name="android.intent.action.DIAL"/></intent>
         <intent>
             <action android:name="android.intent.action.VIEW"/>

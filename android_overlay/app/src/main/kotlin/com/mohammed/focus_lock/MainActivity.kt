@@ -88,6 +88,17 @@ class MainActivity : FlutterActivity() {
                         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     result.success(true)
                 }
+                // Opens ONLY the Google Drive app (never a browser or other app)
+                "openDrive" -> {
+                    val i = packageManager.getLaunchIntentForPackage("com.google.android.apps.docs")
+                    if (i != null) {
+                        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(i)
+                        result.success(true)
+                    } else {
+                        result.success(false) // Drive not installed
+                    }
+                }
                 "isDeviceOwner" -> {
                     val dpm = getSystemService(DevicePolicyManager::class.java)
                     result.success(dpm.isDeviceOwnerApp(packageName))
@@ -109,7 +120,7 @@ class MainActivity : FlutterActivity() {
             // Device Owner = real kiosk. The dialer is whitelisted so calls still work.
             val admin = ComponentName(this, FocusAdmin::class.java)
             val dialer = try { getSystemService(TelecomManager::class.java).defaultDialerPackage } catch (e: Exception) { null }
-            dpm.setLockTaskPackages(admin, listOfNotNull(packageName, dialer).toTypedArray())
+            dpm.setLockTaskPackages(admin, listOfNotNull(packageName, dialer, "com.google.android.apps.docs").toTypedArray())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 dpm.setLockTaskFeatures(admin, 0) // disable every system UI feature
             }

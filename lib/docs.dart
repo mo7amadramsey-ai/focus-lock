@@ -4,6 +4,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
+import 'channel.dart';
 import 'theme.dart';
 
 // Folder that holds every document opened from Moodle
@@ -184,6 +185,18 @@ class _DocsPageState extends State<DocsPage> {
     return Icons.description;
   }
 
+  Future<void> _openDrive() async {
+    bool ok = false;
+    try {
+      ok = (await ch.invokeMethod('openDrive')) == true;
+    } catch (_) {}
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تطبيق Google Drive غير مثبّت على الهاتف')),
+      );
+    }
+  }
+
   Future<void> _delete(File f) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -202,7 +215,16 @@ class _DocsPageState extends State<DocsPage> {
 
   @override
   Widget build(BuildContext c) => Scaffold(
-        appBar: AppBar(title: const Text('المستندات')),
+        appBar: AppBar(
+          title: const Text('المستندات'),
+          actions: [
+            IconButton(
+              tooltip: 'فتح Google Drive',
+              icon: const Icon(Icons.add_to_drive),
+              onPressed: _openDrive,
+            ),
+          ],
+        ),
         body: !loaded
             ? const Center(child: CircularProgressIndicator(color: kAccent))
             : files.isEmpty

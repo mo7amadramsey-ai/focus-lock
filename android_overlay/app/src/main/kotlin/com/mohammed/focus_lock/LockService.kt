@@ -17,7 +17,9 @@ class LockService : AccessibilityService() {
             "com.android.incallui", "com.google.android.dialer", "com.android.dialer",
             "com.android.server.telecom", "com.samsung.android.incallui", "com.android.phone",
             "com.android.contacts", "com.google.android.contacts", "com.samsung.android.dialer",
-            "com.samsung.android.contacts", "com.android.providers.contacts"
+            "com.samsung.android.contacts", "com.android.providers.contacts",
+            // Google Drive only (to view files) + its file picker
+            "com.google.android.apps.docs", "com.google.android.documentsui", "com.android.documentsui"
         )
         // The phone's real default dialer
         try { getSystemService(TelecomManager::class.java).defaultDialerPackage?.let { set.add(it) } } catch (e: Exception) {}
