@@ -53,6 +53,11 @@ class MainActivity : FlutterFragmentActivity() {
                     enforceLock()
                     result.success(true)
                 }
+                // Strict mode switched to another video of the same folder: remember it for resume
+                "setTarget" -> {
+                    if (sessionActive()) prefs.edit().putString("target", call.argument<String>("target")).apply()
+                    result.success(true)
+                }
                 // Timer ended: release kiosk mode but keep the session data so it can be extended
                 "releaseLock" -> {
                     try { stopLockTask() } catch (e: Exception) {}

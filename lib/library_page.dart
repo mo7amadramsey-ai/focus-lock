@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'downloads.dart';
 import 'player_page.dart';
 import 'storage.dart';
 import 'theme.dart';
@@ -15,6 +16,7 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   Directory? dir;
   List<FileSystemEntity> items = [];
+  SortMode mode = SortMode.nameAsc;
 
   @override
   void initState() {
@@ -24,17 +26,23 @@ class _LibraryPageState extends State<LibraryPage> {
 
   Future<void> _load() async {
     dir = widget.dir ?? await videosRoot();
-    final list = dir!.listSync();
-    // folders first, then files, alphabetical
-    list.sort((a, b) {
-      final fa = a is Directory ? 0 : 1, fb = b is Directory ? 0 : 1;
-      return fa != fb ? fa - fb : a.path.compareTo(b.path);
-    });
-    items = list.where((e) => e is Directory || isVideo(e.path)).toList();
+    mode = await loadSort(dir!.path);
+    final all = dir!.listSync();
+    // folders first, then videos; each group in the chosen order (name / date / size)
+    final folders = sortEntities(all.whereType<Directory>().toList(), mode == SortMode.sizeBig || mode == SortMode.sizeSmall ? SortMode.nameAsc : mode);
+    final files = sortEntities(all.whereType<File>().where((f) => isVideo(f.path)).toList(), mode);
+    items = [...folders, ...files];
     if (mounted) setState(() {});
   }
 
   String nameOf(FileSystemEntity e) => e.uri.pathSegments.where((s) => s.isNotEmpty).last;
+
+  Future<void> changeSort() async {
+    final m = await pickSort(context, mode);
+    if (m == null) return;
+    await saveSort(dir!.path, m);
+    _load();
+  }
 
   Future<void> newFolder() async {
     final n = await askName(context, 'اسم المجلد (المادة)');
@@ -77,7 +85,13 @@ class _LibraryPageState extends State<LibraryPage> {
 
   @override
   Widget build(BuildContext c) => Scaffold(
-        appBar: AppBar(title: Text(widget.dir == null ? 'الفيديوهات المحملة' : nameOf(widget.dir!))),
+        appBar: AppBar(
+          title: Text(widget.dir == null ? 'الفيديوهات المحملة' : nameOf(widget.dir!)),
+          actions: [
+            IconButton(tooltip: 'ترتيب', icon: const Icon(Icons.sort), onPressed: changeSort),
+            const DownloadsButton(),
+          ],
+        ),
         floatingActionButton:
             FloatingActionButton(onPressed: newFolder, child: const Icon(Icons.create_new_folder)),
         body: items.isEmpty
@@ -90,7 +104,7 @@ class _LibraryPageState extends State<LibraryPage> {
                     child: ListTile(
                     leading: Icon(e is Directory ? Icons.folder : Icons.play_circle, color: kAccent, size: 30),
                     subtitle: e is File
-                        ? Text('${(e.lengthSync() / 1048576).toStringAsFixed(1)} MB',
+                        ? Text('#${items.whereType<File>().toList().indexOf(e) + 1}  •  ${(e.lengthSync() / 1048576).toStringAsFixed(1)} MB',
                             style: const TextStyle(color: Colors.white54))
                         : null,
                     title: Text(e is File ? nameOf(e).replaceAll(RegExp(r'\.[A-Za-z0-9]+$'), '') : nameOf(e)),

@@ -103,3 +103,107 @@ Future<void> flushPos() async {
     await (await _posFile()).writeAsString(jsonEncode(_pos));
   } catch (_) {}
 }
+
+// ---- Sorting (per folder, remembered) ----
+enum SortMode { nameAsc, nameDesc, dateNew, dateOld, sizeBig, sizeSmall }
+
+const sortLabels = {
+  SortMode.nameAsc: 'الاسم (أ - ي / 1 2 3)',
+  SortMode.nameDesc: 'الاسم (عكسي)',
+  SortMode.dateNew: 'التاريخ (الأحدث أولاً)',
+  SortMode.dateOld: 'التاريخ (الأقدم أولاً)',
+  SortMode.sizeBig: 'الحجم (الأكبر أولاً)',
+  SortMode.sizeSmall: 'الحجم (الأصغر أولاً)',
+};
+
+String entityName(FileSystemEntity e) => e.path.split('/').where((x) => x.isNotEmpty).last;
+
+// "2" comes before "10" (natural order), so numbered lectures sort correctly
+int naturalCompare(String a, String b) {
+  final ra = RegExp(r'\d+|\D+').allMatches(a.toLowerCase()).map((m) => m[0]!).toList();
+  final rb = RegExp(r'\d+|\D+').allMatches(b.toLowerCase()).map((m) => m[0]!).toList();
+  for (var i = 0; i < ra.length && i < rb.length; i++) {
+    final x = ra[i], y = rb[i];
+    final nx = int.tryParse(x), ny = int.tryParse(y);
+    final c = (nx != null && ny != null) ? nx.compareTo(ny) : x.compareTo(y);
+    if (c != 0) return c;
+  }
+  return ra.length - rb.length;
+}
+
+List<T> sortEntities<T extends FileSystemEntity>(List<T> list, SortMode m) {
+  int byName(T a, T b) => naturalCompare(entityName(a), entityName(b));
+  DateTime date(T e) {
+    try {
+      return e.statSync().modified;
+    } catch (_) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+  }
+
+  int size(T e) {
+    try {
+      return e.statSync().size;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  final l = [...list];
+  switch (m) {
+    case SortMode.nameAsc:
+      l.sort(byName);
+    case SortMode.nameDesc:
+      l.sort((a, b) => byName(b, a));
+    case SortMode.dateNew:
+      l.sort((a, b) => date(b).compareTo(date(a)));
+    case SortMode.dateOld:
+      l.sort((a, b) => date(a).compareTo(date(b)));
+    case SortMode.sizeBig:
+      l.sort((a, b) => size(b).compareTo(size(a)));
+    case SortMode.sizeSmall:
+      l.sort((a, b) => size(a).compareTo(size(b)));
+  }
+  return l;
+}
+
+Future<File> _sortFile() async => File('${(await getApplicationSupportDirectory()).path}/sort.json');
+
+Future<SortMode> loadSort(String folder) async {
+  try {
+    final f = await _sortFile();
+    if (await f.exists()) {
+      final i = (jsonDecode(await f.readAsString()) as Map)[folder];
+      if (i is int && i >= 0 && i < SortMode.values.length) return SortMode.values[i];
+    }
+  } catch (_) {}
+  return SortMode.nameAsc;
+}
+
+Future<void> saveSort(String folder, SortMode m) async {
+  try {
+    final f = await _sortFile();
+    final map = await f.exists() ? Map<String, dynamic>.from(jsonDecode(await f.readAsString()) as Map) : <String, dynamic>{};
+    map[folder] = m.index;
+    await f.writeAsString(jsonEncode(map));
+  } catch (_) {}
+}
+
+// Bottom sheet to choose the sorting
+Future<SortMode?> pickSort(BuildContext c, SortMode current) => showModalBottomSheet<SortMode>(
+      context: c,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('ترتيب الملفات', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ),
+          for (final m in SortMode.values)
+            ListTile(
+              title: Text(sortLabels[m]!),
+              trailing: m == current ? const Icon(Icons.check, color: Color(0xFFFF3B3B)) : null,
+              onTap: () => Navigator.pop(ctx, m),
+            ),
+        ]),
+      ),
+    );

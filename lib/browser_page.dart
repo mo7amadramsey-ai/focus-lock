@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'channel.dart';
+import 'downloads.dart';
 import 'storage.dart';
 import 'lock_setup.dart';
 import 'strict_shell.dart';
@@ -45,7 +46,6 @@ class BrowserPage extends StatefulWidget {
 class _BrowserPageState extends State<BrowserPage> {
   late final WebViewController w;
   String url = '';
-  final progress = ValueNotifier<String>('');
 
   bool get onVideo => url.contains('watch?v=') || url.contains('youtu.be/');
 
@@ -93,37 +93,19 @@ class _BrowserPageState extends State<BrowserPage> {
         context, MaterialPageRoute(builder: (_) => StrictWebPage(url: target, endMillis: end)));
   }
 
-  // Download the current video into the app folder
+  // Add the current video to the downloads list (several can run at once)
   Future<void> download() async {
     final dir = await chooseFolder(context); // subject folder
     if (dir == null) return;
-    final yt = YoutubeExplode();
-    try {
-      final id = VideoId(url);
-      progress.value = 'جاري التحضير...';
-      final video = await yt.videos.get(id);
-      final manifest = await yt.videos.streamsClient.getManifest(id);
-      final info = manifest.muxed.withHighestBitrate(); // video + audio in one file
-      final safe = video.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      final out = File('${dir.path}/$safe.mp4').openWrite();
-      final total = info.size.totalBytes;
-      var got = 0;
-      await for (final chunk in yt.videos.streamsClient.get(info)) {
-        out.add(chunk);
-        got += chunk.length;
-        progress.value = 'تحميل ${(got * 100 / total).toStringAsFixed(0)}%';
-      }
-      await out.close();
-      progress.value = '';
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم التحميل')));
-      }
-    } catch (e) {
-      progress.value = '';
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل التحميل: $e')));
-    } finally {
-      yt.close();
-    }
+    final started = dl.start(url, dir);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(started ? 'أُضيف إلى التحميلات' : 'هذا الفيديو يُحمَّل إلى هذا المجلد بالفعل'),
+      action: SnackBarAction(
+        label: 'عرض',
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DownloadsPage())),
+      ),
+    ));
   }
 
   @override
@@ -145,6 +127,7 @@ class _BrowserPageState extends State<BrowserPage> {
             Text('يوتيوب'),
           ]),
           actions: [
+            const DownloadsButton(),
             IconButton(
               tooltip: 'تسجيل الدخول إلى حساب Google',
               icon: const Icon(Icons.account_circle_outlined),
@@ -158,20 +141,15 @@ class _BrowserPageState extends State<BrowserPage> {
           if (onVideo)
             Padding(
               padding: const EdgeInsets.all(8),
-              child: ValueListenableBuilder(
-                valueListenable: progress,
-                builder: (_, String p, __) => Row(children: [
-                  Expanded(
-                      child: FilledButton.icon(
-                          onPressed: startStrict, icon: const Icon(Icons.lock), label: const Text('الوضع الصارم'))),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: FilledButton.tonalIcon(
-                          onPressed: p.isEmpty ? download : null,
-                          icon: const Icon(Icons.download),
-                          label: Text(p.isEmpty ? 'تحميل' : p))),
-                ]),
-              ),
+              child: Row(children: [
+                Expanded(
+                    child: FilledButton.icon(
+                        onPressed: startStrict, icon: const Icon(Icons.lock), label: const Text('الوضع الصارم'))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: FilledButton.tonalIcon(
+                        onPressed: download, icon: const Icon(Icons.download), label: const Text('تحميل'))),
+              ]),
             ),
         ]),
       ));

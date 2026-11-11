@@ -26,6 +26,8 @@ class _StrictShellState extends State<StrictShell> {
   late int end = widget.endMillis;
   late int _totalMs = (end - DateTime.now().millisecondsSinceEpoch).clamp(1, 1 << 40).toInt();
   Duration left = Duration.zero;
+  // Same key in portrait and landscape: the video is MOVED, never rebuilt, when the phone rotates
+  final _childKey = GlobalKey();
   bool ringing = false, expired = false, sheetOpen = false, unlocked = false;
 
   @override
@@ -210,6 +212,7 @@ class _StrictShellState extends State<StrictShell> {
   Widget build(BuildContext c) {
     final progress = (1 - left.inMilliseconds / _totalMs).clamp(0.0, 1.0).toDouble();
     final land = MediaQuery.orientationOf(c) == Orientation.landscape;
+    final child = KeyedSubtree(key: _childKey, child: widget.child);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -219,13 +222,13 @@ class _StrictShellState extends State<StrictShell> {
         backgroundColor: Colors.black,
         body: land
             ? Stack(children: [
-                Positioned.fill(child: widget.child),
+                Positioned.fill(child: child),
                 Positioned(top: 4, left: 8, child: SafeArea(child: _compactBar())),
               ])
             : SafeArea(
                 child: Column(children: [
                   _fullHeader(progress),
-                  Expanded(child: widget.child),
+                  Expanded(child: child),
                 ]),
               ),
       ),
