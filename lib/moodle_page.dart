@@ -10,6 +10,7 @@ import 'docs.dart';
 import 'preview_page.dart';
 import 'theme.dart';
 import 'web_fs.dart';
+import 'yt_embed.dart';
 import 'lock_setup.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
@@ -186,6 +187,12 @@ class _MoodlePageState extends State<MoodlePage> {
     final r = await w.runJavaScriptReturningResult(findVideoJs);
     final m = decodeJs(r) as Map?;
     if (m == null || m['url'] == null) {
+      // video embedded from YouTube: download it through the YouTube downloader
+      final yid = await pageYoutubeId(w);
+      if (yid != null && mounted) {
+        await downloadYoutubeVideo(context, yid, title: await w.getTitle());
+        return null;
+      }
       toast(m?['err'] == 'iframe'
           ? 'الفيديو مضمّن من منصة خارجية ولا يمكن تحميله من هنا'
           : m?['err'] == 'blob'
@@ -354,7 +361,9 @@ class _MoodlePageState extends State<MoodlePage> {
     Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (_) => pick['kind'] == 'yt' ? BrowserPage(initialUrl: u) : PreviewPage(url: u)));
+            builder: (_) => pick['kind'] == 'yt'
+                ? PreviewPage(url: u, title: '${pick['title']}', youtubeId: VideoId.parseVideoId(u))
+                : PreviewPage(url: u)));
   }
 
   // ---- Strict mode on the current Moodle video page ----
