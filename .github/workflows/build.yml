@@ -18,6 +18,11 @@ jobs:
       # Overlay our native code, manifest and resources
       - run: cp -r android_overlay/* android/
       - run: flutter pub get
+      # A lint crash inside a dependency (video_player_android) broke the build; lint is not needed for the APK
+      - name: Disable lintVital tasks
+        run: |
+          mkdir -p ~/.gradle/init.d
+          printf 'allprojects { tasks.configureEach { t -> if (t.name.startsWith("lintVital")) t.enabled = false } }\n' > ~/.gradle/init.d/skip-lint.gradle
       - name: Build APK
         run: flutter build apk --release --build-number=${{ github.run_number }} 2>&1 | tee build.log
         shell: bash
