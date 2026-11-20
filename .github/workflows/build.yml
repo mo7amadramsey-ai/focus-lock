@@ -11,8 +11,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      # Flutter is PINNED to 3.47.x. Builds up to 2026-11-15 (which installed fine) used the 3.47 line;
+      # 'channel: stable' silently jumped to 3.50 (released 2026-11-11) and later builds stopped installing.
       - uses: subosito/flutter-action@v2
-        with: { channel: stable }
+        with:
+          channel: stable
+          flutter-version: '3.47.x'
+          cache: true
+      - run: flutter --version
       # Generate the Android scaffolding (existing files are kept)
       - run: flutter create --platforms=android --org com.mohammed --project-name focus_lock .
       # Overlay our native code, manifest and resources
@@ -68,8 +74,10 @@ jobs:
           "$BT/aapt" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion" | tee badging.txt
           CERT=$(grep -m1 "SHA-256 digest" verify.txt | sed 's/.*: //')
           SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          FV=$(flutter --version | head -1)
           {
             echo "### APK check"
+            echo "- Flutter: \`$FV\`"
             echo "- Signing cert SHA-256: \`$CERT\` (must be IDENTICAL in every build, otherwise updates fail)"
             echo "- File SHA-256: \`$SHA\`"
             echo '```'; cat badging.txt; echo '```'
