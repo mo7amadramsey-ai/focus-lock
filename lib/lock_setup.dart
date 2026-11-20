@@ -5,9 +5,18 @@ import 'theme.dart';
 /// true while a strict session screen is on (used by the app lock)
 final strictActive = ValueNotifier<bool>(false);
 
+/// true while the whole-app lock is running (no other lock may start inside it)
+final appLocked = ValueNotifier<bool>(false);
+
 /// Returns true when the strong lock is available (accessibility service on,
 /// or Device Owner). Otherwise explains how to enable it and returns false.
 Future<bool> ensureLockReady(BuildContext c) async {
+  if (appLocked.value) {
+    try {
+      ScaffoldMessenger.of(c).showSnackBar(const SnackBar(content: Text('أنت داخل قفل التطبيق بالفعل')));
+    } catch (_) {}
+    return false;
+  }
   final owner = await ch.invokeMethod<bool>('isDeviceOwner') ?? false;
   final acc = await ch.invokeMethod<bool>('isAccessibilityEnabled') ?? false;
   if (owner || acc) return true;
@@ -30,11 +39,14 @@ Future<bool> ensureLockReady(BuildContext c) async {
   return false;
 }
 
-/// The lock never lasts more than one hour (a 3-hour video only locks for 1 hour; renew if you want more)
-const kMaxLockMs = 60 * 60 * 1000;
+/// Single-video lock: at most 1.5 hours. Whole-app / folder (playlist) lock: at most 3 hours.
+/// Longer sessions are renewed by extending (never shortened, no emergency exit).
+const kMaxVideoLockMs = 90 * 60 * 1000;
+const kMaxAppLockMs = 180 * 60 * 1000;
 
-/// Lock length = video length + extra minutes, capped at one hour
-int lockMs(Duration base, int extraMin) => (base.inMilliseconds + extraMin * 60000).clamp(1, kMaxLockMs).toInt();
+/// Lock length = video length + extra minutes, capped
+int lockMs(Duration base, int extraMin, {int max = kMaxVideoLockMs}) =>
+    (base.inMilliseconds + extraMin * 60000).clamp(1, max).toInt();
 
 String fmtMinutes(int m) {
   if (m < 60) return '$m دقيقة';
@@ -43,7 +55,7 @@ String fmtMinutes(int m) {
 }
 
 /// Asks for a number of minutes
-Future<int?> askMinutes(BuildContext c) {
+Future<int?> askMinutes(BuildContext c, {int max = 90}) {
   final t = TextEditingController();
   return showDialog<int>(
     context: c,
@@ -53,14 +65,14 @@ Future<int?> askMinutes(BuildContext c) {
         controller: t,
         autofocus: true,
         keyboardType: TextInputType.number,
-        decoration: const InputDecoration(hintText: 'مثال: 45 (الحد الأقصى 60)'),
+        decoration: const InputDecoration(hintText: 'مثال: 45 (الحد الأقصى $max)'),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
         FilledButton(
           onPressed: () {
             final n = int.tryParse(t.text.trim());
-            Navigator.pop(ctx, n != null && n > 0 && n <= 60 ? n : null);
+            Navigator.pop(ctx, n != null && n > 0 && n <= max ? n : null);
           },
           child: const Text('موافق'),
         ),
@@ -80,21 +92,22 @@ Widget _sheetGrip() => Center(
 
 /// Before starting: lock length = video length + optional extra time.
 /// Returns the extra minutes (0 = none) or null when cancelled.
-Future<int?> confirmStrict(BuildContext c, Duration base) {
+Future<int?> confirmStrict(BuildContext c, Duration base,
+    {int max = kMaxVideoLockMs, String title = 'بدء الوضع الصارم'}) {
   var extra = 0;
   return showModalBottomSheet<int>(
     context: c,
     isScrollControlled: true,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) {
-        final total = (base.inMinutes + (base.inSeconds % 60 > 0 ? 1 : 0) + extra).clamp(1, 60).toInt();
+        final total = (base.inMinutes + (base.inSeconds % 60 > 0 ? 1 : 0) + extra).clamp(1, max ~/ 60000).toInt();
         return Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _sheetGrip(),
-            const Text('بدء الوضع الصارم', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            Text('مدة الفيديو ${fmtMinutes(base.inMinutes)}. يُحسب وقت القفل فقط أثناء تشغيل الفيديو: إذا أوقفته أو أُغلقت الشاشة يتوقف العدّاد. الحد الأقصى للقفل ساعة واحدة، وتستطيع تجديدها بعد ذلك.',
+            Text('المدة ${fmtMinutes(base.inMinutes)}. يُحسب وقت القفل فقط أثناء التشغيل: إذا أوقفته أو أُغلقت الشاشة يتوقف العدّاد. الحد الأقصى للقفل ${fmtMinutes(max ~/ 60000)}، ولا يوجد مخرج طوارئ.',
                 style: const TextStyle(color: Colors.white60, height: 1.5)),
             const SizedBox(height: 16),
             const Text('وقت إضافي', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -110,7 +123,7 @@ Future<int?> confirmStrict(BuildContext c, Duration base) {
                 avatar: const Icon(Icons.edit, size: 16),
                 label: Text([0, 15, 30, 60].contains(extra) ? 'مخصص' : '+$extra د'),
                 onPressed: () async {
-                  final n = await askMinutes(ctx);
+                  final n = await askMinutes(ctx, max: max ~/ 60000);
                   if (n != null) set(() => extra = n);
                 },
               ),
@@ -161,7 +174,7 @@ Future<int?> pickExtension(BuildContext c, {required bool expired}) {
         Text(
           expired
               ? 'لم يُغلق الفيديو. هل تريد تمديد فترة التركيز لتكمل المشاهدة؟'
-              : 'أضف وقتاً إلى القفل الحالي (لا يتجاوز المتبقي ساعة واحدة). التمديد فقط، ولا يمكن تقصير القفل.',
+              : 'أضف وقتاً إلى القفل الحالي (ضمن الحد الأقصى للقفل). التمديد فقط، ولا يمكن تقصير القفل.',
           style: const TextStyle(color: Colors.white60, height: 1.5),
         ),
         const SizedBox(height: 16),

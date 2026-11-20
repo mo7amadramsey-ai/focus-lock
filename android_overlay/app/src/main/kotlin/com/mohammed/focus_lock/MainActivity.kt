@@ -43,10 +43,10 @@ class MainActivity : FlutterFragmentActivity() {
         channel = MethodChannel(engine.dartExecutor.binaryMessenger, "focus_lock")
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
-                // args: left (ms of watching still required, max 1 hour), type ("web"/"local"/"moodle"), target (url or file path)
+                // args: left (ms of watching still required, max 3 hours), type ("web"/"local"/"moodle"/"playlist"/"app"), target (url or file path)
                 "startLock" -> {
                     prefs.edit()
-                        .putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(1L, 3600000L))
+                        .putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(1L, 10800000L))
                         .putString("type", call.argument<String>("type"))
                         .putString("target", call.argument<String>("target"))
                         .apply()
@@ -58,7 +58,7 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 // Extend the running (or just-expired) session: new end time, lock again
                 "extendLock" -> {
-                    prefs.edit().putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(1L, 3600000L)).apply()
+                    prefs.edit().putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(1L, 10800000L)).apply()
                     enforceLock()
                     applyOverlayBlock()
                     result.success(true)
@@ -66,7 +66,7 @@ class MainActivity : FlutterFragmentActivity() {
                 // Dart reports the remaining time every few seconds (and whenever counting stops)
                 "setLeft" -> {
                     if (prefs.contains("type")) {
-                        prefs.edit().putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(0L, 3600000L)).apply()
+                        prefs.edit().putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(0L, 10800000L)).apply()
                     }
                     result.success(true)
                 }

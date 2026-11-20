@@ -22,14 +22,16 @@ class StrictShell extends StatefulWidget {
   final int leftMs; // time still to be watched
   final Widget child;
   final ValueListenable<bool>? playing; // null = always counts (while the app is on screen)
-  const StrictShell({super.key, required this.leftMs, required this.child, this.playing});
+  final int maxMs; // video lock 1.5h, whole-app / playlist lock 3h
+  const StrictShell(
+      {super.key, required this.leftMs, required this.child, this.playing, this.maxMs = kMaxVideoLockMs});
   @override
   State<StrictShell> createState() => _StrictShellState();
 }
 
 class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
   Timer? _t;
-  late int _leftMs = widget.leftMs.clamp(0, kMaxLockMs).toInt();
+  late int _leftMs = widget.leftMs.clamp(0, widget.maxMs).toInt();
   late int _totalMs = _leftMs < 1 ? 1 : _leftMs;
   Duration get left => Duration(milliseconds: _leftMs);
   DateTime _last = DateTime.now();
@@ -110,9 +112,9 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
       return;
     }
     // never more than one hour in total
-    final newLeft = ((expired ? 0 : _leftMs) + r * 60000).clamp(0, kMaxLockMs).toInt();
+    final newLeft = ((expired ? 0 : _leftMs) + r * 60000).clamp(0, widget.maxMs).toInt();
     if (!expired && newLeft <= _leftMs) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الحد الأقصى للقفل ساعة واحدة')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('الحد الأقصى للقفل ${fmtMinutes(widget.maxMs ~/ 60000)}')));
       return;
     }
     await ch.invokeMethod('extendLock', {'left': newLeft});

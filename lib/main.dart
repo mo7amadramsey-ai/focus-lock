@@ -6,11 +6,13 @@ import 'browser_page.dart';
 import 'channel.dart';
 import 'docs.dart';
 import 'library_page.dart';
+import 'lock_modes.dart';
 import 'lock_setup.dart';
 import 'moodle_page.dart';
 import 'player_page.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
+import 'study_page.dart';
 import 'theme.dart';
 
 void main() {
@@ -61,7 +63,11 @@ class _BootState extends State<Boot> {
           ? StrictWebPage(url: target, leftMs: left)
           : s['type'] == 'moodle'
               ? StrictMoodlePage(url: target, leftMs: left)
-              : PlayerPage(path: target, leftMs: left);
+              : s['type'] == 'playlist'
+                  ? PlaylistLockPage(ids: target.split(','), leftMs: left)
+                  : s['type'] == 'app'
+                      ? AppLockPage(leftMs: left)
+                      : PlayerPage(path: target, leftMs: left);
     }
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => next));
   }
@@ -216,6 +222,8 @@ class _HomeState extends State<Home> {
                 _tile(c, Icons.school, 'المودل', 'محاضرات ومستندات الجامعة', const [Color(0xFF3D7BFF), Color(0xFF1A3C9C)], const MoodlePage()),
                 _tile(c, Icons.video_library, 'الفيديوهات', 'المحمّلة حسب المواد', const [Color(0xFF8E44FF), Color(0xFF4A1C9C)], const LibraryPage()),
                 _tile(c, Icons.description, 'المستندات', 'PDF وWord وExcel وPowerPoint', const [Color(0xFF16A085), Color(0xFF0B5345)], const DocsPage()),
+                _tile(c, Icons.event_note, 'المرشد الدراسي', 'خطة وتقدم ودفتر واختبارات', const [Color(0xFFF39C12), Color(0xFF9C640C)], const StudyPage()),
+                _tile(c, Icons.lock_clock, 'أنواع القفل', 'التطبيق · المجلد · الفيديو', const [Color(0xFF2C3E50), Color(0xFF111A24)], const LockHubPage()),
               ],
             ),
             const SizedBox(height: 22),

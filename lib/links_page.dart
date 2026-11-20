@@ -7,8 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'docs.dart';
+import 'notebook_page.dart';
 import 'preview_page.dart';
 import 'storage.dart';
+import 'study.dart';
 import 'theme.dart';
 
 // JS that runs INSIDE the logged-in Moodle page (keeps the session). It lists all the user's courses,
@@ -276,6 +278,15 @@ class LinkCrawler extends ChangeNotifier {
   }
 }
 
+IconData groupIcon(String g) => switch (g) {
+      'yt' => Icons.smart_display,
+      'pdf' => Icons.picture_as_pdf,
+      'doc' => Icons.description_outlined,
+      'video' => Icons.play_circle_outline,
+      'file' => Icons.insert_drive_file_outlined,
+      _ => Icons.link,
+    };
+
 const _groups = <String, String>{
   'all': 'الكل',
   'yt': 'يوتيوب',
@@ -305,6 +316,7 @@ class _LinksPageState extends State<LinksPage> {
   void initState() {
     super.initState();
     c.load();
+    study.load();
   }
 
   void toast(String t) {
@@ -341,18 +353,11 @@ class _LinksPageState extends State<LinksPage> {
     }
   }
 
-  IconData _icon(String g) => switch (g) {
-        'yt' => Icons.smart_display,
-        'pdf' => Icons.picture_as_pdf,
-        'doc' => Icons.description_outlined,
-        'video' => Icons.play_circle_outline,
-        'file' => Icons.insert_drive_file_outlined,
-        _ => Icons.link,
-      };
+  IconData _icon(String g) => groupIcon(g);
 
   @override
   Widget build(BuildContext ctx) => AnimatedBuilder(
-        animation: c,
+        animation: Listenable.merge([c, study]),
         builder: (_, __) {
           final q = query.trim().toLowerCase();
           final counts = <String, int>{'all': c.links.length};
@@ -437,7 +442,9 @@ class _LinksPageState extends State<LinksPage> {
                             key: ValueKey('$id|$filter|$q'),
                             initiallyExpanded: q.isNotEmpty || filter != 'all',
                             title: Text(c.courses[id] ?? 'مادة $id', maxLines: 2, overflow: TextOverflow.ellipsis),
-                            subtitle: Text('${byCourse[id]!.length} رابط', style: const TextStyle(color: Colors.white54)),
+                            subtitle: Text(
+                                '${byCourse[id]!.length} رابط · منجز ${byCourse[id]!.where((l) => countable(l) && study.isDone(l)).length}/${byCourse[id]!.where(countable).length}',
+                                style: const TextStyle(color: Colors.white54)),
                             children: [
                               for (final l in byCourse[id]!)
                                 ListTile(
@@ -445,6 +452,17 @@ class _LinksPageState extends State<LinksPage> {
                                   leading: Icon(_icon(l.group), color: l.group == 'yt' ? kAccent : null),
                                   title: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis),
                                   subtitle: Text(_groups[l.group] ?? '', style: const TextStyle(color: Colors.white54)),
+                                  trailing: countable(l)
+                                      ? Row(mainAxisSize: MainAxisSize.min, children: [
+                                          IconButton(
+                                            tooltip: 'الدفتر',
+                                            icon: Icon(Icons.edit_note, color: (study.noteOf(l)?.isEmpty ?? true) ? null : kAccent),
+                                            onPressed: () => Navigator.push(
+                                                context, MaterialPageRoute(builder: (_) => NotebookPage(link: l))),
+                                          ),
+                                          Checkbox(value: study.isDone(l), onChanged: (_) => study.toggleDone(l)),
+                                        ])
+                                      : null,
                                   onTap: () => _open(l),
                                   onLongPress: () {
                                     Clipboard.setData(ClipboardData(text: l.url));
