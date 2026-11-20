@@ -65,7 +65,7 @@ Future<int?> askMinutes(BuildContext c, {int max = 90}) {
         controller: t,
         autofocus: true,
         keyboardType: TextInputType.number,
-        decoration: const InputDecoration(hintText: 'مثال: 45 (الحد الأقصى $max)'),
+        decoration: InputDecoration(hintText: 'مثال: 45 (الحد الأقصى $max)'),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
