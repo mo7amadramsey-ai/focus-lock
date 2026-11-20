@@ -11,6 +11,7 @@ import 'preview_page.dart';
 import 'theme.dart';
 import 'web_fs.dart';
 import 'yt_embed.dart';
+import 'links_page.dart';
 import 'lock_setup.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
@@ -118,6 +119,7 @@ class MoodlePage extends StatefulWidget {
 
 class _MoodlePageState extends State<MoodlePage> {
   late final WebViewController w;
+  late final LinkCrawler crawler; // extracts the links of all courses (links only, no downloads)
   String url = moodleHome;
   final progress = ValueNotifier<String>('');
   IOSink? sink;
@@ -137,6 +139,8 @@ class _MoodlePageState extends State<MoodlePage> {
       ..addJavaScriptChannel('FLDL', onMessageReceived: (m) {
         _q = _q.then((_) => onChunk(m.message)).catchError((_) {});
       })
+      // Receives the links found by the crawler (see links_page.dart)
+      ..addJavaScriptChannel('FLINK', onMessageReceived: (m) => crawler.onMessage(m.message))
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (r) {
           if (!r.isMainFrame) return NavigationDecision.navigate;
@@ -156,6 +160,14 @@ class _MoodlePageState extends State<MoodlePage> {
         onPageFinished: (_) => bypass.clear(),
       ))
       ..loadRequest(Uri.parse(moodleHome));
+    crawler = LinkCrawler(w);
+  }
+
+  @override
+  void dispose() {
+    crawler.stop();
+    crawler.dispose();
+    super.dispose();
   }
 
   void toast(String t) {
@@ -395,6 +407,15 @@ class _MoodlePageState extends State<MoodlePage> {
             Text('المودل'),
           ]),
           actions: [
+            IconButton(
+              tooltip: 'روابط المودل',
+              icon: const Icon(Icons.link),
+              onPressed: () => Navigator.push(
+                  c,
+                  MaterialPageRoute(
+                      builder: (_) => LinksPage(
+                          crawler: crawler, onMoodle: () => isMoodle(url), onOpenDoc: openDoc))),
+            ),
             IconButton(
               tooltip: 'المستندات',
               icon: const Icon(Icons.description_outlined),
