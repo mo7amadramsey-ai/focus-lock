@@ -23,23 +23,58 @@ jobs:
         run: |
           mkdir -p ~/.gradle/init.d
           printf 'allprojects { tasks.configureEach { t -> if (t.name.startsWith("lintVital")) t.enabled = false } }\n' > ~/.gradle/init.d/skip-lint.gradle
+      # Fail early (and clearly) if the permanent signing key is missing.
+      # Never fall back to a debug key: that is what produced "package conflicts / appears invalid" on updates.
+      - name: Check signing secrets exist
+        env:
+          KS_B64: ${{ secrets.FL_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.FL_KEYSTORE_PASS }}
+        shell: bash
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ]; then
+            echo "::error::Secrets FL_KEYSTORE_B64 / FL_KEYSTORE_PASS are missing or empty. Refusing to publish an APK signed with a different key."
+            exit 1
+          fi
       - name: Build APK
         run: flutter build apk --release --build-number=${{ github.run_number }} 2>&1 | tee build.log
         shell: bash
       # Re-sign with the PERMANENT key (stored in repo secrets) so every build can update the previous one.
-      # Without this each CI run used a fresh random debug key -> "package appears invalid" on update.
       - name: Sign APK with the permanent key
         env:
           KS_B64: ${{ secrets.FL_KEYSTORE_B64 }}
           KS_PASS: ${{ secrets.FL_KEYSTORE_PASS }}
         shell: bash
         run: |
+          set -euo pipefail
           echo "$KS_B64" | base64 -d > /tmp/fl.jks
           AS=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
           APK=build/app/outputs/flutter-apk/app-release.apk
-          "$AS" sign --ks /tmp/fl.jks --ks-key-alias focuslock --ks-pass env:KS_PASS --key-pass env:KS_PASS "$APK"
-          "$AS" verify --print-certs "$APK" | head -3
+          "$AS" sign --ks /tmp/fl.jks --ks-key-alias focuslock --ks-pass env:KS_PASS --key-pass env:KS_PASS \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true "$APK"
           rm -f /tmp/fl.jks
+      # Validate the final APK. The build fails here instead of shipping a broken package.
+      - name: Verify APK (signature, alignment, manifest)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          echo "== apksigner verify =="
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee verify.txt
+          grep -q "Verifies" verify.txt
+          echo "== zipalign check =="
+          "$BT/zipalign" -c 4 "$APK" && echo "aligned OK"
+          echo "== manifest summary =="
+          "$BT/aapt" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion" | tee badging.txt
+          CERT=$(grep -m1 "SHA-256 digest" verify.txt | sed 's/.*: //')
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          {
+            echo "### APK check"
+            echo "- Signing cert SHA-256: \`$CERT\` (must be IDENTICAL in every build, otherwise updates fail)"
+            echo "- File SHA-256: \`$SHA\`"
+            echo '```'; cat badging.txt; echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY" release_notes.md
+          unzip -tq "$APK"
       # On failure, publish the error lines to a 'buildlog' branch so they can be read
       - name: Publish build log on failure
         if: failure()
@@ -47,12 +82,13 @@ jobs:
           mkdir /tmp/bl
           grep -nE "Error|error:|FAILURE|What went wrong|lib/" build.log | head -80 > /tmp/bl/errors.txt || true
           tail -n 120 build.log > /tmp/bl/tail.txt || true
+          [ -f verify.txt ] && cp verify.txt /tmp/bl/verify.txt || true
           git config user.name github-actions
           git config user.email actions@github.com
           git checkout --orphan buildlog
           git rm -rf . -q
-          cp /tmp/bl/errors.txt /tmp/bl/tail.txt .
-          git add errors.txt tail.txt
+          cp /tmp/bl/* .
+          git add .
           git commit -qm "build log"
           git push -f origin buildlog
       - uses: actions/upload-artifact@v4
@@ -64,5 +100,6 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Focus Lock v1.0.${{ github.run_number }}
+          body_path: release_notes.md
           files: build/app/outputs/flutter-apk/app-release.apk
           make_latest: true
