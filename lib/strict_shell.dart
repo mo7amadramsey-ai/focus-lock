@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'channel.dart';
 import 'lock_setup.dart';
+import 'study.dart';
 import 'nav.dart';
 import 'theme.dart';
 
@@ -44,6 +45,7 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    study.addSession();
     WidgetsBinding.instance.addObserver(this);
     strictActive.value = true;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -77,7 +79,10 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
     // Counts only if: app on screen + OUR window focused and full-screen (no floating/pop-up/split window) + video playing
     ch.invokeMethod<bool>('isFocused').then((v) => _focus = v ?? true).catchError((_) => true);
     counting = _fg && _focus && (widget.playing?.value ?? true);
-    if (counting) _leftMs -= dt;
+    if (counting) {
+      _leftMs -= dt;
+      study.addStudyMs(dt); // study-time statistics
+    }
     if (_leftMs <= 0) {
       _leftMs = 0;
       _expire();

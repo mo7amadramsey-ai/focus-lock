@@ -12,11 +12,14 @@ import 'moodle_page.dart';
 import 'player_page.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
+import 'study.dart';
 import 'study_page.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await study.load(); // study data, settings and the Moodle address first
+  study.scheduleReminders();
   homeBuilder = () => const Home();
   // Free rotation: landscape video / documents whenever you turn the phone
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);

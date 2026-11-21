@@ -166,6 +166,22 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 // True only when OUR window has the focus and is not in a floating / split / pop-up window.
                 // (With floating windows the app stays "resumed", so the lifecycle alone cannot tell.)
+                // Study reminders
+                "setReminders" -> {
+                    Notifier.set(this, call.argument<String>("json") ?: "[]")
+                    result.success(true)
+                }
+                "notifyNow" -> {
+                    Notifier.show(this, 7001, call.argument<String>("title") ?: "", call.argument<String>("body") ?: "")
+                    result.success(true)
+                }
+                "askNotifications" -> {
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 91)
+                    }
+                    result.success(true)
+                }
                 "isFocused" -> {
                     val multi = Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode
                     result.success(hasWindowFocus() && !multi)

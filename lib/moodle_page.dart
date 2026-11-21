@@ -12,16 +12,16 @@ import 'theme.dart';
 import 'web_fs.dart';
 import 'yt_embed.dart';
 import 'links_page.dart';
+import 'study.dart';
 import 'lock_setup.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
 
-const moodleHome = 'https://moodle.ucas.edu.ps/';
 
 // Only the university domain is allowed (subdomains kept for single sign-on)
 bool isMoodle(String url) {
   final h = Uri.tryParse(url)?.host ?? '';
-  return h == 'moodle.ucas.edu.ps' || h.endsWith('.ucas.edu.ps');
+  return isMoodleHost(h);
 }
 
 // Finds the video on the current Moodle page (<video>, <source>, or a direct file link)

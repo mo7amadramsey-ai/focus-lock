@@ -1,3 +1,4 @@
+import 'study.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'browser_page.dart';
@@ -5,7 +6,6 @@ import 'downloads.dart';
 import 'storage.dart';
 import 'theme.dart';
 
-const _moodleOrigin = 'https://moodle.ucas.edu.ps/';
 
 String watchUrl(String id) => 'https://m.youtube.com/watch?v=$id';
 
@@ -23,7 +23,7 @@ String embedHtml(String id) => '''
 </body></html>
 ''';
 
-const embedBaseUrl = _moodleOrigin;
+String get embedBaseUrl => moodleHome;
 
 // Returns the id of the first embedded YouTube video on the page ('' if none)
 const _findYoutubeIdJs = r'''

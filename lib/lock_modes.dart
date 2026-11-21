@@ -15,7 +15,7 @@ import 'web_fs.dart';
 import 'yt_embed.dart';
 
 /// Starts a lock over a list of Moodle YouTube videos (folder / playlist lock).
-/// Length = sum of their durations (+ extra), at most 3 hours; the videos beyond that are left for the next session.
+/// Length = sum of their durations (+ extra), at most 1.5 hours (actual playing time); the videos beyond that are left for the next session.
 Future<void> startPlaylistLock(BuildContext c, List<MoodleLink> items) async {
   final ids = <String>[];
   var sec = 0;
@@ -23,7 +23,7 @@ Future<void> startPlaylistLock(BuildContext c, List<MoodleLink> items) async {
     final id = ytId(l);
     if (id == null || ids.contains(id)) continue;
     final s = study.dur[id] ?? 900;
-    if (ids.isNotEmpty && (sec + s) * 1000 > kMaxAppLockMs) break;
+    if (ids.isNotEmpty && (sec + s) * 1000 > kMaxVideoLockMs) break;
     ids.add(id);
     sec += s;
   }
@@ -33,9 +33,9 @@ Future<void> startPlaylistLock(BuildContext c, List<MoodleLink> items) async {
   }
   if (!await ensureLockReady(c) || !c.mounted) return;
   final base = Duration(seconds: sec);
-  final extra = await confirmStrict(c, base, max: kMaxAppLockMs, title: 'قفل ${ids.length} فيديو');
+  final extra = await confirmStrict(c, base, max: kMaxVideoLockMs, title: 'قفل ${ids.length} فيديو');
   if (extra == null || !c.mounted) return;
-  final left = lockMs(base, extra, max: kMaxAppLockMs);
+  final left = lockMs(base, extra, max: kMaxVideoLockMs);
   await ch.invokeMethod('startLock', {'left': left, 'type': 'playlist', 'target': ids.join(',')});
   if (!c.mounted) return;
   Navigator.push(c, MaterialPageRoute(builder: (_) => PlaylistLockPage(ids: ids, leftMs: left)));
@@ -196,6 +196,36 @@ class _PlaylistLockPageState extends State<PlaylistLockPage> {
     } catch (_) {}
   }
 
+  // A note tied to the second now playing (kept in that lecture's notebook)
+  Future<void> _stampHere() async {
+    var sec = 0;
+    try {
+      final r = await w.runJavaScriptReturningResult(
+          "(function(){var v=document.querySelector('video');return v?Math.floor(v.currentTime):0;})()");
+      sec = int.tryParse(r.toString().replaceAll('"', '')) ?? 0;
+    } catch (_) {}
+    final l = link;
+    if (l == null || !mounted) return;
+    final tc = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('ملاحظة عند ${fmtClock(sec)}'),
+        content: TextField(controller: tc, autofocus: true, decoration: const InputDecoration(hintText: 'الملاحظة')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
+        ],
+      ),
+    );
+    if (ok == true && tc.text.trim().isNotEmpty) {
+      final n = study.ensureNote(l);
+      n.stamps.add(Stamp(sec, tc.text.trim()));
+      n.stamps.sort((a, b) => a.s.compareTo(b.s));
+      study.saveSoon();
+    }
+  }
+
   void _go(int i) {
     if (i < 0 || i >= widget.ids.length) return;
     setState(() => idx = i);
@@ -215,7 +245,7 @@ class _PlaylistLockPageState extends State<PlaylistLockPage> {
     final l = link;
     return StrictShell(
       leftMs: widget.leftMs,
-      maxMs: kMaxAppLockMs,
+      maxMs: kMaxVideoLockMs,
       playing: playing,
       child: Column(children: [
         Expanded(child: FsWebView(w, strict: true)),
@@ -242,6 +272,7 @@ class _PlaylistLockPageState extends State<PlaylistLockPage> {
                         color: study.isDone(l) ? Colors.greenAccent : null),
                   ),
                 ),
+              IconButton(tooltip: 'ملاحظة عند هذه الثانية', onPressed: _stampHere, icon: const Icon(Icons.add_comment_outlined)),
               IconButton(
                   tooltip: 'التالي',
                   onPressed: idx < widget.ids.length - 1 ? () => _go(idx + 1) : null,
@@ -314,7 +345,7 @@ class _LockHubPageState extends State<LockHubPage> {
               style: TextStyle(color: Colors.white60, height: 1.6)),
           const SizedBox(height: 12),
           _card(Icons.phone_android, 'قفل التطبيق كله', 'تتنقل داخل التطبيق بحرية والباقي محجوب. حتى 3 ساعات.', () => startAppLock(c)),
-          _card(Icons.folder_special, 'قفل مجلد / قائمة تشغيل', 'فيديوهات مادة واحدة متتابعة، مدة القفل مجموع مددها. حتى 3 ساعات.', _pickCourse),
+          _card(Icons.folder_special, 'قفل مجلد / قائمة تشغيل', 'فيديوهات مادة واحدة متتابعة، مدة القفل مجموع مددها. حتى ساعة ونصف.', _pickCourse),
           _card(Icons.smart_display, 'قفل فيديو واحد', 'افتح الفيديو من يوتيوب أو المودل أو المحمّلة ثم «الوضع الصارم». مدة القفل = مدة الفيديو، حتى ساعة ونصف.', () {
             showModalBottomSheet<void>(
               context: c,

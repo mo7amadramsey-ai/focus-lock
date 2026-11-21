@@ -50,9 +50,16 @@ const crawlJs = r'''
     var visited = {}, queue = [], active = 0, count = 0, sent = {};
     var YT = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|v\/))([\w-]{11})/;
     var YTL = /youtube\.com\/playlist\?list=/;
-    function emit(cid, k, title, url, ct) {
+    function emit(cid, k, title, url, ct, sec) {
       var key = cid + "|" + url; if (sent[key]) return; sent[key] = 1;
-      P({t: "link", cid: cid, k: k, title: title, url: url, ct: ct || ""});
+      P({t: "link", cid: cid, k: k, title: title, url: url, ct: ct || "", s: sec || ""});
+    }
+    // name of the course section (chapter / week) that contains an element
+    function secOf(e, fb) {
+      var s = e.closest && e.closest("li.section,[data-sectionname],section.course-section");
+      if (!s) return fb || "";
+      var n = s.getAttribute("data-sectionname") || clean(s.querySelector(".sectionname,.section-title,h3"));
+      return (n || fb || "").slice(0, 80);
     }
     function clean(el) {
       if (!el) return "";
@@ -65,14 +72,14 @@ const crawlJs = r'''
       if (u.indexOf(base) !== 0) return false;
       var m = u.match(/\/course\/view\.php\?(?:.*&)?id=(\d+)/);
       if (m) return m[1] === cid;
-      return /\/mod\/(page|folder|book|resource|url|lesson|label|imscp)\/view\.php/.test(u);
+      return /\/mod\/(page|folder|book|resource|url|lesson|label|imscp|assign|quiz)\/view\.php/.test(u);
     }
-    function push(u, cid, title) {
+    function push(u, cid, title, sec) {
       u = u.split("#")[0];
-      if (visited[u] || count + queue.length > 2500) return;
-      visited[u] = 1; queue.push({u: u, cid: cid, title: title});
+      if (visited[u] || count + queue.length > 3000) return;
+      visited[u] = 1; queue.push({u: u, cid: cid, title: title, sec: sec || ""});
     }
-    courses.forEach(function(c){ push(base + "/course/view.php?id=" + c.id, c.id, c.name); });
+    courses.forEach(function(c){ push(base + "/course/view.php?id=" + c.id, c.id, c.name, ""); });
 
     async function visit(it) {
       count++;
@@ -80,7 +87,7 @@ const crawlJs = r'''
       try { r = await fetch(it.u, {credentials: "include"}); }
       catch (e) {
         // an external redirect (mod/url) is blocked by CORS: keep the Moodle link, it opens inside the app
-        if (/\/mod\/url\/view\.php/.test(it.u)) emit(it.cid, "ext", it.title || it.u, it.u, "");
+        if (/\/mod\/url\/view\.php/.test(it.u)) emit(it.cid, "ext", it.title || it.u, it.u, "", it.sec);
         return;
       }
       var ct = r.headers.get("content-type") || "";
@@ -89,7 +96,7 @@ const crawlJs = r'''
         // the page was really a file (mod/resource): record the final file link, do not download it
         if (r.body && r.body.cancel) r.body.cancel();
         if (fu.indexOf("/login/") > -1) return;
-        emit(it.cid, ct.indexOf("video/") === 0 ? "video" : "file", it.title || fileName(fu), fu, ct);
+        emit(it.cid, ct.indexOf("video/") === 0 ? "video" : "file", it.title || fileName(fu), fu, ct, it.sec);
         return;
       }
       if (fu.indexOf("/login/") > -1) return;
@@ -97,22 +104,37 @@ const crawlJs = r'''
       var d = new DOMParser().parseFromString(html, "text/html");
       var root = d.querySelector("#region-main") || d.body; // skip the side drawer (it lists every course)
       var pt = (d.title || "").split(":").pop().trim();
+      // assignment / quiz page: send its due-date text and submission status (read in the app)
+      var tm = it.u.match(/\/mod\/(assign|quiz)\/view\.php/);
+      if (tm) {
+        var tx = (root.textContent || "").replace(/\s+/g, " ");
+        var di = tx.search(/Due\s*:|Closes\s*:|Due date|Close date|موعد التسليم|تاريخ التسليم|يغلق|ينتهي في|تاريخ الاستحقاق|الاستحقاق\s*:/i);
+        var sub = null;
+        if (tm[1] === "assign") {
+          if (/Submitted for grading|تم التسليم|تم تقديم|Graded|تم التقييم/i.test(tx)) sub = true;
+          else if (/No submissions? (?:have been made|made) yet|No attempt|لم يتم تقديم|لا توجد محاولات|لم تقم بتسليم/i.test(tx)) sub = false;
+        } else {
+          if (/Finished|منتهية|Your final grade|الدرجة النهائية/i.test(tx)) sub = true;
+        }
+        P({t: "task", cid: it.cid, k: tm[1], title: it.title || pt, url: it.u, due: di >= 0 ? tx.substr(di, 140) : "", sub: sub});
+      }
       root.querySelectorAll("a[href],iframe[src],iframe[data-src],video[src],video source[src],object[data],embed[src]").forEach(function(e) {
         var raw = e.getAttribute("href") || e.getAttribute("src") || e.getAttribute("data-src") || e.getAttribute("data");
         if (!raw || /^(javascript|mailto|tel|blob|data):|^#/.test(raw)) return;
         var u; try { u = new URL(raw, fu).href; } catch (x) { return; }
         var isA = e.tagName === "A";
         var title = isA ? (clean(e.querySelector(".instancename") || e) || pt) : (e.title || pt);
+        var sc = secOf(e, it.sec);
         var m = u.match(YT);
-        if (m) { emit(it.cid, "yt", title, "https://m.youtube.com/watch?v=" + m[1]); return; }
-        if (YTL.test(u)) { emit(it.cid, "yt", title, u); return; }
-        if (/pluginfile\.php/.test(u)) { emit(it.cid, /^(VIDEO|SOURCE)$/.test(e.tagName) ? "video" : "file", isA ? (title || fileName(u)) : fileName(u), u); return; }
-        if (/^(VIDEO|SOURCE)$/.test(e.tagName)) { emit(it.cid, "video", pt, u); return; }
+        if (m) { emit(it.cid, "yt", title, "https://m.youtube.com/watch?v=" + m[1], "", sc); return; }
+        if (YTL.test(u)) { emit(it.cid, "yt", title, u, "", sc); return; }
+        if (/pluginfile\.php/.test(u)) { emit(it.cid, /^(VIDEO|SOURCE)$/.test(e.tagName) ? "video" : "file", isA ? (title || fileName(u)) : fileName(u), u, "", sc); return; }
+        if (/^(VIDEO|SOURCE)$/.test(e.tagName)) { emit(it.cid, "video", pt, u, "", sc); return; }
         if (isA) {
-          if (follow(u, it.cid)) { push(u, it.cid, title); return; }
-          if (/^https?:/.test(u) && u.indexOf(base) !== 0) emit(it.cid, "ext", title || u, u);
+          if (follow(u, it.cid)) { push(u, it.cid, title, sc); return; }
+          if (/^https?:/.test(u) && u.indexOf(base) !== 0) emit(it.cid, "ext", title || u, u, "", sc);
         } else if (/^https?:/.test(u) && u.indexOf(base) !== 0) {
-          emit(it.cid, "ext", title || u, u);
+          emit(it.cid, "ext", title || u, u, "", sc);
         }
       });
     }
@@ -139,8 +161,8 @@ const crawlJs = r'''
 ''';
 
 class MoodleLink {
-  final String cid, kind, title, url, ct;
-  const MoodleLink(this.cid, this.kind, this.title, this.url, this.ct);
+  final String cid, kind, title, url, ct, sec; // sec = chapter / week name in the course
+  const MoodleLink(this.cid, this.kind, this.title, this.url, this.ct, [this.sec = '']);
 
   // yt / pdf / doc / video / file / ext
   String get group {
@@ -152,9 +174,9 @@ class MoodleLink {
     return 'file';
   }
 
-  Map<String, String> toJson() => {'c': cid, 'k': kind, 't': title, 'u': url, 'ct': ct};
+  Map<String, String> toJson() => {'c': cid, 'k': kind, 't': title, 'u': url, 'ct': ct, 's': sec};
   factory MoodleLink.fromJson(Map j) =>
-      MoodleLink('${j['c']}', '${j['k']}', '${j['t']}', '${j['u']}', '${j['ct'] ?? ''}');
+      MoodleLink('${j['c']}', '${j['k']}', '${j['t']}', '${j['u']}', '${j['ct'] ?? ''}', '${j['s'] ?? ''}');
 }
 
 /// Collects the links of every Moodle course. Only links are kept (no downloads) and they are
@@ -166,6 +188,8 @@ class LinkCrawler extends ChangeNotifier {
   final courses = <String, String>{}; // course id -> name
   final links = <MoodleLink>[];
   final _seen = <String>{};
+  final tasks = <MoodleTask>[]; // assignments / quizzes found by this crawl
+  Set<String> _prev = {};
   bool running = false;
   int visited = 0, queued = 0;
   String? error;
@@ -218,6 +242,8 @@ class LinkCrawler extends ChangeNotifier {
     error = null;
     visited = 0;
     queued = 0;
+    _prev = links.map((l) => '${l.cid}|${l.url}').toSet();
+    tasks.clear();
     courses.clear();
     links.clear();
     _seen.clear();
@@ -244,8 +270,12 @@ class LinkCrawler extends ChangeNotifier {
         }
         break;
       case 'link':
-        final l = MoodleLink('${m['cid']}', '${m['k']}', '${m['title']}', '${m['url']}', '${m['ct'] ?? ''}');
+        final l = MoodleLink('${m['cid']}', '${m['k']}', '${m['title']}', '${m['url']}', '${m['ct'] ?? ''}', '${m['s'] ?? ''}');
         if (_seen.add('${l.cid}|${l.url}')) links.add(l);
+        break;
+      case 'task':
+        final raw = '${m['due'] ?? ''}';
+        tasks.add(MoodleTask('${m['cid']}', '${m['k']}', '${m['title']}', '${m['url']}', raw, parseMoodleDate(raw), m['sub'] as bool?));
         break;
       case 'prog':
         visited = (m['v'] as num).toInt();
@@ -254,6 +284,8 @@ class LinkCrawler extends ChangeNotifier {
       case 'done':
         running = false;
         save();
+        study.recordCrawl(links.where((l) => !_prev.contains('${l.cid}|${l.url}')).toList(), List.of(tasks),
+            first: _prev.isEmpty);
         break;
       case 'err':
         running = false;
