@@ -79,7 +79,7 @@ class _PreviewPageState extends State<PreviewPage> {
         child: Scaffold(
           appBar: AppBar(
             title: Row(children: [
-              const Icon(Icons.visibility, color: kAccent, size: 22),
+              Icon(Icons.visibility, color: kAccent, size: 22),
               const SizedBox(width: 10),
               Expanded(child: Text(widget.title, overflow: TextOverflow.ellipsis)),
             ]),

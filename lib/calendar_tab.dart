@@ -77,7 +77,7 @@ class _CalendarTabState extends State<CalendarTab> {
           IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => setState(() => month = DateTime(month.year, month.month + 1))),
         ]),
         Row(children: [
-          for (final d in const ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج']) Expanded(child: Center(child: Text(d, style: const TextStyle(color: Colors.white54)))),
+          for (final d in const ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج']) Expanded(child: Center(child: Text(d, style: TextStyle(color: kMuted)))),
         ]),
         const SizedBox(height: 4),
         GridView.count(
@@ -108,7 +108,7 @@ class _CalendarTabState extends State<CalendarTab> {
                       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                         if (items.any((a) => a.isExam)) const _Dot(Colors.redAccent),
                         if (items.any((a) => !a.isExam)) const _Dot(Colors.amber),
-                        if (planDay[k] != null) const _Dot(kAccent),
+                        if (planDay[k] != null) _Dot(kAccent),
                       ]),
                     ]),
                   ),
@@ -117,12 +117,12 @@ class _CalendarTabState extends State<CalendarTab> {
           ],
         ),
         const SizedBox(height: 6),
-        const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           _Dot(Colors.redAccent), Text(' امتحان   '), _Dot(Colors.amber), Text(' تسليم   '), _Dot(kAccent), Text(' خطة'),
         ]),
         const Divider(height: 24),
         Text(dayLabel(sel), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-        if (selAg.isEmpty && selPlan == null) const Padding(padding: EdgeInsets.all(10), child: Text('لا شيء في هذا اليوم', style: TextStyle(color: Colors.white54))),
+        if (selAg.isEmpty && selPlan == null) Padding(padding: EdgeInsets.all(10), child: Text('لا شيء في هذا اليوم', style: TextStyle(color: kMuted))),
         for (final a in selAg)
           GestureDetector(
             onLongPress: a.manualId == null
@@ -143,7 +143,7 @@ class _CalendarTabState extends State<CalendarTab> {
             child: agendaTile(a),
           ),
         if (selPlan != null) ...[
-          const Padding(padding: EdgeInsets.only(top: 8), child: Text('خطة الدراسة', style: TextStyle(color: Colors.white60))),
+          Padding(padding: EdgeInsets.only(top: 8), child: Text('خطة الدراسة', style: TextStyle(color: kMuted))),
           for (final l in selPlan.items) videoTile(c, l),
         ],
         const SizedBox(height: 80),

@@ -13,6 +13,7 @@ import 'web_fs.dart';
 import 'yt_embed.dart';
 import 'links_page.dart';
 import 'study.dart';
+import 'lock_ctl.dart';
 import 'lock_setup.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
@@ -112,7 +113,8 @@ Future<File> newDocFile(String finalUrl, String ct, String disp) async {
 /// Moodle browser (university domain only) with download + strict mode.
 /// YouTube links open in the in-app YouTube browser; documents open in the in-app viewer.
 class MoodlePage extends StatefulWidget {
-  const MoodlePage({super.key});
+  final bool autoSync; // log in if needed, read all courses by itself, then close
+  const MoodlePage({super.key, this.autoSync = false});
   @override
   State<MoodlePage> createState() => _MoodlePageState();
 }
@@ -127,6 +129,7 @@ class _MoodlePageState extends State<MoodlePage> {
   int total = 0, got = 0;
   bool docMode = false, resolved = false;
   String? docUrl;
+  bool _syncStarted = false, _authFlow = true; // _authFlow: a university login (SSO) may leave the Moodle domain
   final bypass = <String>{}; // urls the page may load once without being intercepted
   Future<void> _q = Future.value(); // chunks are handled strictly in order
 
@@ -148,7 +151,7 @@ class _MoodlePageState extends State<MoodlePage> {
             openYoutube(r.url);
             return NavigationDecision.prevent;
           }
-          if (!isMoodle(r.url)) return NavigationDecision.prevent;
+          if (!isMoodle(r.url)) return _authFlow ? NavigationDecision.navigate : NavigationDecision.prevent;
           if (bypass.remove(r.url)) return NavigationDecision.navigate;
           if (isDocLink(r.url)) {
             openDoc(r.url);
@@ -160,10 +163,28 @@ class _MoodlePageState extends State<MoodlePage> {
         onPageFinished: (_) {
           bypass.clear();
           _fillLogin();
+          if (isMoodle(url) && !url.contains('/login')) _authFlow = false;
+          _maybeSync();
         },
       ))
       ..loadRequest(Uri.parse(moodleHome));
-    crawler = LinkCrawler(w);
+    crawler = LinkCrawler(w)..addListener(_onCrawl);
+  }
+
+  // autoSync: as soon as we are logged in, read everything
+  void _maybeSync() {
+    if (!widget.autoSync || _syncStarted || !isMoodle(url) || url.contains('/login')) return;
+    _syncStarted = true;
+    crawler.start();
+  }
+
+  void _onCrawl() {
+    if (!widget.autoSync || !_syncStarted || crawler.running || !mounted) return;
+    if (crawler.error != null) {
+      _syncStarted = false; // not logged in yet: stay here so the student can log in, then it starts again
+      return;
+    }
+    Navigator.pop(context, true);
   }
 
   // Fills (never submits) the Moodle login form with the login the student chose to save
@@ -367,7 +388,7 @@ class _MoodlePageState extends State<MoodlePage> {
                       color: it['kind'] == 'yt' ? kAccent : null),
                   title: Text('${it['title']}', maxLines: 2, overflow: TextOverflow.ellipsis),
                   subtitle: Text(it['kind'] == 'yt' ? 'يوتيوب' : (it['kind'] == 'video' ? 'فيديو' : 'مشغّل خارجي'),
-                      style: const TextStyle(color: Colors.white54)),
+                      style: TextStyle(color: kMuted)),
                   onTap: () => Navigator.pop(ctx, it),
                 ),
               ListTile(
@@ -404,7 +425,7 @@ class _MoodlePageState extends State<MoodlePage> {
     if (extra == null) return;
     final target = url.split('#').first;
     final left = lockMs(d, extra); // never more than one hour
-    await ch.invokeMethod('startLock', {'left': left, 'type': 'moodle', 'target': target});
+    await lock.startVideo(left, 'moodle', target);
     if (!mounted) return;
     Navigator.pushReplacement(
         context, MaterialPageRoute(builder: (_) => StrictMoodlePage(url: target, leftMs: left)));
@@ -413,7 +434,7 @@ class _MoodlePageState extends State<MoodlePage> {
   @override
   Widget build(BuildContext c) => Scaffold(
         appBar: AppBar(
-          title: const Row(children: [
+          title: Row(children: [
             Icon(Icons.school, color: kAccent),
             SizedBox(width: 10),
             Text('المودل'),
@@ -436,6 +457,22 @@ class _MoodlePageState extends State<MoodlePage> {
           ],
         ),
         body: Column(children: [
+          // autoSync progress (the app is reading your courses)
+          AnimatedBuilder(
+            animation: crawler,
+            builder: (_, __) => !(widget.autoSync && crawler.running)
+                ? const SizedBox.shrink()
+                : Container(
+                    color: kSurface,
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 8),
+                      Text('جاري قراءة موادك... ${crawler.visited} صفحة · ${crawler.links.length} عنصر', style: TextStyle(color: kSoft)),
+                    ]),
+                  ),
+          ),
+
           Expanded(child: FsWebView(w)),
           Container(
             color: kSurface,

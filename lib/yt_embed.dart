@@ -111,7 +111,7 @@ class WatchOnYoutubeBadge extends StatelessWidget {
         child: InkWell(
           borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
           onTap: onTap,
-          child: const Padding(
+          child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.smart_display, color: kAccent, size: 20),

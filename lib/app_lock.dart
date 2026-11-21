@@ -118,7 +118,7 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
                       height: 96,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(colors: [kAccent, Color(0xFFB71C1C)]),
+                        gradient: LinearGradient(colors: [kAccent, Color(0xFFB71C1C)]),
                         boxShadow: [BoxShadow(color: kAccent.withOpacity(.35), blurRadius: 30)],
                       ),
                       child: const Icon(Icons.lock, size: 46, color: Colors.white),

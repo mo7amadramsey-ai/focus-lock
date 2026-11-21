@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'channel.dart';
+import 'lock_ctl.dart';
 import 'theme.dart';
 
 /// true while a strict session screen is on (used by the app lock)
@@ -11,9 +12,9 @@ final appLocked = ValueNotifier<bool>(false);
 /// Returns true when the strong lock is available (accessibility service on,
 /// or Device Owner). Otherwise explains how to enable it and returns false.
 Future<bool> ensureLockReady(BuildContext c) async {
-  if (appLocked.value) {
+  if (lock.vidOn) {
     try {
-      ScaffoldMessenger.of(c).showSnackBar(const SnackBar(content: Text('أنت داخل قفل التطبيق بالفعل')));
+      ScaffoldMessenger.of(c).showSnackBar(const SnackBar(content: Text('قفل فيديو يعمل الآن')));
     } catch (_) {}
     return false;
   }
@@ -108,7 +109,7 @@ Future<int?> confirmStrict(BuildContext c, Duration base,
             Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text('المدة ${fmtMinutes(base.inMinutes)}. يُحسب وقت القفل فقط أثناء التشغيل: إذا أوقفته أو أُغلقت الشاشة يتوقف العدّاد. الحد الأقصى للقفل ${fmtMinutes(max ~/ 60000)}، ولا يوجد مخرج طوارئ.',
-                style: const TextStyle(color: Colors.white60, height: 1.5)),
+                style: TextStyle(color: kMuted, height: 1.5)),
             const SizedBox(height: 16),
             const Text('وقت إضافي', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
@@ -134,7 +135,7 @@ Future<int?> confirmStrict(BuildContext c, Duration base,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(color: kSurface2, borderRadius: BorderRadius.circular(16)),
               child: Row(children: [
-                const Icon(Icons.lock_clock, color: kAccent),
+                Icon(Icons.lock_clock, color: kAccent),
                 const SizedBox(width: 10),
                 Expanded(child: Text('مدة القفل الكلية: ${fmtMinutes(total)}', style: const TextStyle(fontWeight: FontWeight.w700))),
               ]),
@@ -175,7 +176,7 @@ Future<int?> pickExtension(BuildContext c, {required bool expired}) {
           expired
               ? 'لم يُغلق الفيديو. هل تريد تمديد فترة التركيز لتكمل المشاهدة؟'
               : 'أضف وقتاً إلى القفل الحالي (ضمن الحد الأقصى للقفل). التمديد فقط، ولا يمكن تقصير القفل.',
-          style: const TextStyle(color: Colors.white60, height: 1.5),
+          style: TextStyle(color: kMuted, height: 1.5),
         ),
         const SizedBox(height: 16),
         Wrap(spacing: 8, runSpacing: 8, children: [

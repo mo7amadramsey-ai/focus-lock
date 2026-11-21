@@ -1,98 +1,41 @@
 import 'package:flutter/material.dart';
-import 'calendar_tab.dart';
-import 'course_download.dart';
-import 'follow_tab.dart';
 import 'links_page.dart';
 import 'lock_modes.dart';
 import 'lock_setup.dart';
 import 'moodle_page.dart';
 import 'notebook_page.dart';
-import 'notebook_tab.dart';
 import 'preview_page.dart';
-import 'settings_page.dart';
-import 'stats_tab.dart';
 import 'study.dart';
 import 'theme.dart';
 
-/// Private study mentor, all local on the phone: today, plan, calendar, follow-up, progress, notebook, statistics.
-class StudyPage extends StatefulWidget {
-  const StudyPage({super.key});
-  @override
-  State<StudyPage> createState() => _StudyPageState();
-}
-
-class _StudyPageState extends State<StudyPage> {
-  @override
-  void initState() {
-    super.initState();
-    study.load().then((_) {
-      study.fetchDurations();
-      if (study.remindersOn) study.askNotifications();
-    });
-  }
-
-  @override
-  Widget build(BuildContext c) => DefaultTabController(
-        length: 7,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Row(children: [Icon(Icons.event_note, color: kAccent), SizedBox(width: 10), Text('المرشد الدراسي')]),
-            actions: [
-              IconButton(
-                tooltip: 'الإعدادات',
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const StudySettingsPage())),
-              ),
-            ],
-            bottom: const TabBar(isScrollable: true, tabAlignment: TabAlignment.start, tabs: [
-              Tab(text: 'اليوم'),
-              Tab(text: 'الخطة'),
-              Tab(text: 'التقويم'),
-              Tab(text: 'المتابعة'),
-              Tab(text: 'التقدم'),
-              Tab(text: 'الدفتر'),
-              Tab(text: 'الإحصاءات'),
-            ]),
-          ),
-          body: AnimatedBuilder(
-            animation: study,
-            builder: (_, __) => TabBarView(children: [
-              const TodayTab(),
-              const PlanTab(),
-              const CalendarTab(),
-              const FollowTab(),
-              const ProgressTab(),
-              const NotebookTab(),
-              const StatsTab(),
-            ]),
-          ),
-        ),
-      );
-}
+// Shared pieces of the study screens (plan, calendar, home, courses)
 
 Widget emptyStudy(BuildContext context) => Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.travel_explore, size: 56, color: Colors.white38),
+          Icon(Icons.travel_explore, size: 56, color: kFaint),
           const SizedBox(height: 12),
-          const Text('لا توجد روابط بعد. افتح المودل واضغط أيقونة الروابط 🔗 ثم «ابدأ استخراج الروابط».',
-              textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, height: 1.6)),
+          Text('لا توجد مواد بعد. سجّل الدخول إلى المودل مرة واحدة ليقرأ التطبيق موادك.',
+              textAlign: TextAlign.center, style: TextStyle(color: kSoft, height: 1.6)),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MoodlePage())),
-            icon: const Icon(Icons.school),
-            label: const Text('فتح المودل'),
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const MoodlePage(autoSync: true)));
+              await study.load();
+              study.fetchDurations();
+            },
+            icon: const Icon(Icons.sync),
+            label: const Text('مزامنة المودل'),
           ),
         ]),
       ),
     );
 
-void playLink(BuildContext c, MoodleLink l) => Navigator.push(
-    c, MaterialPageRoute(builder: (_) => PreviewPage(url: l.url, title: l.title, youtubeId: ytId(l))));
+void playLink(BuildContext c, MoodleLink l) =>
+    Navigator.push(c, MaterialPageRoute(builder: (_) => PreviewPage(url: l.url, title: l.title, youtubeId: ytId(l))));
 
-void openNotebook(BuildContext c, MoodleLink l) =>
-    Navigator.push(c, MaterialPageRoute(builder: (_) => NotebookPage(link: l)));
+void openNotebook(BuildContext c, MoodleLink l) => Navigator.push(c, MaterialPageRoute(builder: (_) => NotebookPage(link: l)));
 
 String dayLabel(DateTime date) {
   final diff = dayOnly(date).difference(dayOnly(DateTime.now())).inDays;
@@ -108,8 +51,7 @@ Widget videoTile(BuildContext c, MoodleLink l) => ListTile(
       dense: true,
       leading: Checkbox(value: study.isDone(l), onChanged: (_) => study.toggleDone(l)),
       title: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text('${study.courses[l.cid] ?? ''} · ${(study.secondsOf(l) / 60).ceil()} د',
-          maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54)),
+      subtitle: Text('${study.courses[l.cid] ?? ''} · ${(study.secondsOf(l) / 60).ceil()} د', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: kMuted)),
       trailing: IconButton(icon: const Icon(Icons.edit_note), tooltip: 'الدفتر', onPressed: () => openNotebook(c, l)),
       onTap: () => playLink(c, l),
     );
@@ -119,106 +61,82 @@ Widget agendaTile(AgendaItem a) {
   final icon = a.isExam ? Icons.school : a.kind == 'quiz' ? Icons.quiz : Icons.assignment;
   return ListTile(
     dense: true,
-    leading: Icon(icon, color: a.done ? Colors.greenAccent : late ? Colors.redAccent : kAccent),
+    leading: Icon(icon, color: a.done ? kOk : late ? kAccent : kWarn),
     title: Text(a.title, maxLines: 2, overflow: TextOverflow.ellipsis),
     subtitle: Text('${dayLabel(a.when)} ${clock(a.when)}${late ? ' · متأخر' : ''}${a.cid.isNotEmpty ? ' · ${study.courses[a.cid] ?? ''}' : ''}',
-        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: late ? Colors.redAccent : Colors.white54)),
+        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: late ? kAccent : kMuted)),
     trailing: Checkbox(
       value: a.done,
       onChanged: (_) {
         if (a.manualId != null) {
-          final e = study.manual.firstWhere((x) => x.id == a.manualId);
-          study.toggleManualDone(e);
+          study.toggleManualDone(study.manual.firstWhere((x) => x.id == a.manualId));
         } else {
-          final t = study.tasks.firstWhere((x) => 'task|${x.url}' == a.key);
-          study.toggleTaskDone(t);
+          study.toggleTaskDone(study.tasks.firstWhere((x) => 'task|${x.url}' == a.key));
         }
       },
     ),
   );
 }
 
-// ---------------- today ----------------
-class TodayTab extends StatelessWidget {
-  const TodayTab({super.key});
-  @override
-  Widget build(BuildContext c) {
-    if (study.links.isEmpty && study.manual.isEmpty) return emptyStudy(c);
-    final res = study.planFull();
-    final todayPlan = res.days.where((d) => dayOnly(d.date) == dayOnly(DateTime.now())).toList();
-    final now = DateTime.now();
-    final soon = study.agenda().where((a) => !a.done && !a.when.isBefore(now) && a.when.isBefore(now.add(const Duration(days: 7)))).toList();
-    final late = study.overdue();
-    final due = study.dueQuestions().length;
-    final all = study.totalAll;
-    return ListView(padding: const EdgeInsets.all(12), children: [
-      if (study.notice != null)
-        Card(color: Colors.orange.withOpacity(0.2), child: Padding(padding: const EdgeInsets.all(12), child: Text(study.notice!))),
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(20)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('تقدمك: ${all == 0 ? 0 : (study.doneAll * 100 / all).round()}%', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: all == 0 ? 0 : study.doneAll / all, color: kAccent, minHeight: 8),
-          const SizedBox(height: 8),
-          Text('${study.doneAll} من $all منجز · تتابع ${study.streak} يوم', style: const TextStyle(color: Colors.white60)),
-        ]),
-      ),
-      const SizedBox(height: 10),
-      if (todayPlan.isNotEmpty && todayPlan.first.items.isNotEmpty)
-        Card(
-          color: kSurface,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('خطة اليوم: ${todayPlan.first.items.length} فيديو · ${fmtMinutes(todayPlan.first.minutes)}',
-                  style: const TextStyle(fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => startPlaylistLock(c, todayPlan.first.items),
-                  icon: const Icon(Icons.lock),
-                  label: const Text('ابدأ جلسة اليوم (قفل)'),
-                ),
-              ),
+/// Focus on a few courses and finish them in a chosen time (e.g. 8 courses in 10 days)
+Future<void> showFocusSheet(BuildContext c) async {
+  final ids = study.courseIds().where((id) => study.videoLinks().any((l) => l.cid == id)).toList();
+  if (ids.isEmpty) {
+    ScaffoldMessenger.of(c).showSnackBar(const SnackBar(content: Text('زامن المودل أولاً لتظهر موادك')));
+    return;
+  }
+  final chosen = <String>{...study.focusCourses};
+  var days = study.focusUntil == null ? 7 : study.focusUntil!.difference(dayOnly(DateTime.now())).inDays.clamp(1, 365);
+  final ok = await showModalBottomSheet<bool>(
+    context: c,
+    isScrollControlled: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .85,
+        maxChildSize: .95,
+        builder: (_, sc) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('ركّز على مواد محددة', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('اختر المواد ثم المدة، وتُنشأ خطة لها وحدها.', style: TextStyle(color: kMuted)),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView(controller: sc, children: [
+                for (final id in ids)
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: chosen.contains(id),
+                    onChanged: (v) => set(() => v == true ? chosen.add(id) : chosen.remove(id)),
+                    title: Text(study.courses[id] ?? id, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    subtitle: Text('${study.videoLinks().where((l) => l.cid == id && !study.isDone(l)).length} فيديو متبقٍ', style: TextStyle(color: kMuted)),
+                  ),
+              ]),
+            ),
+            const SizedBox(height: 8),
+            Text('المدة: ${days == 1 ? 'يوم' : '$days يوماً'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+            Wrap(spacing: 8, children: [
+              for (final d in [2, 3, 5, 7, 10, 14, 21, 30])
+                ChoiceChip(label: Text('$d'), selected: days == d, onSelected: (_) => set(() => days = d)),
             ]),
-          ),
+            Slider(min: 1, max: 60, divisions: 59, value: days.clamp(1, 60).toDouble(), onChanged: (v) => set(() => days = v.round())),
+            Row(children: [
+              if (study.focusCourses.isNotEmpty)
+                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء التركيز'))),
+              if (study.focusCourses.isNotEmpty) const SizedBox(width: 10),
+              Expanded(flex: 2, child: FilledButton(onPressed: chosen.isEmpty ? null : () => Navigator.pop(ctx, true), child: const Text('أنشئ الخطة'))),
+            ]),
+          ]),
         ),
-      if (res.shortMin > 0)
-        Card(
-          color: Colors.red.withOpacity(0.18),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text('تنبيه: المطلوب لا يتسع في ساعاتك. ينقصك ${fmtMinutes(res.shortMin)}. زد ساعات الدراسة اليومية أو أجّل الموعد من الإعدادات.',
-                style: const TextStyle(height: 1.5)),
-          ),
-        ),
-      if (due > 0)
-        Card(
-          color: kSurface,
-          child: ListTile(
-            leading: const Icon(Icons.replay_circle_filled, color: kAccent),
-            title: Text('مراجعة اليوم: $due سؤال'),
-            subtitle: const Text('مراجعة متباعدة من أسئلة دفاترك'),
-            onTap: () => Navigator.push(c, MaterialPageRoute(builder: (_) => QuizPage(refs: study.dueQuestions(), title: 'مراجعة اليوم'))),
-          ),
-        ),
-      if (late.isNotEmpty) ...[
-        const Padding(padding: EdgeInsets.fromLTRB(4, 10, 4, 4), child: Text('متأخر', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w800))),
-        for (final a in late.reversed.take(5)) agendaTile(a),
-      ],
-      const Padding(padding: EdgeInsets.fromLTRB(4, 10, 4, 4), child: Text('القادم خلال 7 أيام', style: TextStyle(fontWeight: FontWeight.w800))),
-      if (soon.isEmpty) const Padding(padding: EdgeInsets.all(8), child: Text('لا مواعيد قريبة', style: TextStyle(color: Colors.white54))),
-      for (final a in soon) agendaTile(a),
-      const SizedBox(height: 10),
-      OutlinedButton.icon(
-        onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const MoodlePage())),
-        icon: const Icon(Icons.sync),
-        label: const Text('مزامنة المودل'),
       ),
-    ]);
+    ),
+  );
+  if (ok == true) {
+    study.setFocus(chosen, dayOnly(DateTime.now()).add(Duration(days: days - 1)));
+  } else if (ok == false) {
+    study.clearFocus();
   }
 }
 
@@ -243,70 +161,72 @@ class PlanTab extends StatelessWidget {
     if (study.links.isEmpty && study.manual.isEmpty) return emptyStudy(c);
     final res = study.planFull();
     final plan = res.days;
-    final left = study.videoLinks().where((l) => !study.isDone(l)).length;
-    final daysLeft = study.deadline.difference(dayOnly(DateTime.now())).inDays + 1;
-    return ListView(padding: const EdgeInsets.all(12), children: [
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(20)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.event_available, color: kAccent),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text('الموعد: ${study.deadline.day}/${study.deadline.month}/${study.deadline.year}${daysLeft > 0 ? ' (باقي $daysLeft يوم)' : ' (انتهى)'}',
-                  style: const TextStyle(fontWeight: FontWeight.w800)),
-            ),
-            TextButton(onPressed: () => _pickDeadline(c), child: const Text('تغيير')),
+    final focus = study.focusCourses.isNotEmpty;
+    final left = study.videoLinks().where((l) => !study.isDone(l) && (!focus || study.focusCourses.contains(l.cid))).length;
+    final end = study.planEnd;
+    final daysLeft = end.difference(dayOnly(DateTime.now())).inDays + 1;
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(focus ? Icons.center_focus_strong : Icons.event_available, color: kAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                    focus
+                        ? 'تركيز على ${study.focusCourses.length} مواد حتى ${end.day}/${end.month}'
+                        : 'الموعد: ${end.day}/${end.month}/${end.year}${daysLeft > 0 ? ' (باقي $daysLeft يوم)' : ' (انتهى)'}',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              if (!focus) TextButton(onPressed: () => _pickDeadline(c), child: const Text('تغيير')),
+            ]),
+            const SizedBox(height: 6),
+            Text(
+                left == 0 && res.needMin == 0
+                    ? 'أنهيت كل المطلوب 🎉'
+                    : '$left فيديو متبقٍ · المطلوب ${fmtMinutes(res.needMin)} · متاحك ${fmtMinutes(res.capacityMin)} (${fmtMinutes(study.dailyMinutes)} يومياً)',
+                style: TextStyle(color: kSoft, height: 1.5)),
+            if (res.shortMin > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('⚠ العجز ${fmtMinutes(res.shortMin)}: لا يتسع كل المطلوب في هذه الساعات. زد ساعاتك اليومية أو أطل المدة، ولن أعرض خطة مستحيلة على أنها ممكنة.',
+                    style: TextStyle(color: kAccent, height: 1.5)),
+              ),
+            if (study.fetching)
+              Padding(padding: const EdgeInsets.only(top: 8), child: Text('جاري قراءة مدد الفيديوهات ${study.fetched}/${study.toFetch}...', style: TextStyle(color: kMuted, fontSize: 12.5)))
+            else if (study.unknownDurations > 0)
+              Padding(padding: const EdgeInsets.only(top: 8), child: Text('${study.unknownDurations} فيديو لم تُعرف مدته (حُسب كـ 15 دقيقة)', style: TextStyle(color: kMuted, fontSize: 12.5))),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, children: [
+              FilledButton.tonalIcon(onPressed: () => showFocusSheet(c), icon: const Icon(Icons.center_focus_strong, size: 18), label: Text(focus ? 'تعديل التركيز' : 'ركّز على مواد')),
+              if (focus) OutlinedButton(onPressed: study.clearFocus, child: const Text('إلغاء التركيز')),
+            ]),
           ]),
-          const SizedBox(height: 6),
-          Text(
-              left == 0 && res.needMin == 0
-                  ? 'أنهيت كل المطلوب 🎉'
-                  : '$left فيديو متبقٍ · المطلوب ${fmtMinutes(res.needMin)} · متاحك ${fmtMinutes(res.capacityMin)} (${fmtMinutes(study.dailyMinutes)} يومياً)',
-              style: const TextStyle(color: Colors.white70, height: 1.5)),
-          if (res.shortMin > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('⚠ العجز ${fmtMinutes(res.shortMin)}: لا يمكن إنهاء كل شيء بهذه الساعات. زد الساعات اليومية أو أجّل الموعد، ولن أعرض خطة مستحيلة على أنها ممكنة.',
-                  style: const TextStyle(color: Colors.redAccent, height: 1.5)),
-            ),
-          if (study.fetching)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('جاري قراءة مدد الفيديوهات ${study.fetched}/${study.toFetch}...', style: const TextStyle(color: Colors.white54, fontSize: 12.5)),
-            )
-          else if (study.unknownDurations > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('${study.unknownDurations} فيديو لم تُعرف مدته (حُسب كـ 15 دقيقة)', style: const TextStyle(color: Colors.white54, fontSize: 12.5)),
-            ),
-        ]),
+        ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: 6),
       for (var i = 0; i < plan.length; i++)
         Card(
-          color: kSurface,
           child: ExpansionTile(
             key: ValueKey('day$i${plan[i].items.length}${plan[i].tasks.length}'),
             initiallyExpanded: i == 0,
+            shape: const Border(),
+            collapsedShape: const Border(),
             leading: Icon(i == 0 ? Icons.today : Icons.calendar_month, color: i == 0 ? kAccent : null),
             title: Text(dayLabel(plan[i].date), style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text(
                 '${plan[i].items.length} فيديو${plan[i].tasks.isNotEmpty ? ' · ${plan[i].tasks.length} تسليم/اختبار' : ''} · ${fmtMinutes(plan[i].minutes)}'
                 '${plan[i].minutes > study.dailyMinutes ? ' · أكثر من ساعاتك' : ''}',
-                style: TextStyle(color: plan[i].minutes > study.dailyMinutes ? Colors.orangeAccent : Colors.white54)),
+                style: TextStyle(color: plan[i].minutes > study.dailyMinutes ? kWarn : kMuted)),
             children: [
               if (plan[i].items.isNotEmpty && dayOnly(plan[i].date) == dayOnly(DateTime.now()))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
                   child: SizedBox(
                     width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () => startPlaylistLock(c, plan[i].items),
-                      icon: const Icon(Icons.lock),
-                      label: const Text('ابدأ جلسة اليوم (قفل)'),
-                    ),
+                    child: FilledButton.icon(onPressed: () => startPlaylistLock(c, plan[i].items), icon: const Icon(Icons.lock), label: const Text('ابدأ جلسة اليوم (قفل)')),
                   ),
                 ),
               for (final a in plan[i].tasks) agendaTile(a),
@@ -315,82 +235,5 @@ class PlanTab extends StatelessWidget {
           ),
         ),
     ]);
-  }
-}
-
-// ---------------- progress ----------------
-class ProgressTab extends StatelessWidget {
-  const ProgressTab({super.key});
-  @override
-  Widget build(BuildContext c) {
-    if (study.links.isEmpty) return emptyStudy(c);
-    final all = study.totalAll, dn = study.doneAll;
-    return ListView(padding: const EdgeInsets.all(12), children: [
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(20)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('التقدم الكلي: ${all == 0 ? 0 : (dn * 100 / all).round()}%', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: all == 0 ? 0 : dn / all, color: kAccent, minHeight: 8),
-          const SizedBox(height: 6),
-          Text('$dn من $all منجز (فيديوهات وملفات)', style: const TextStyle(color: Colors.white54)),
-        ]),
-      ),
-      const SizedBox(height: 12),
-      for (final id in study.courseIds())
-        if (study.totalOf(id) > 0) _course(c, id),
-    ]);
-  }
-
-  Widget _course(BuildContext c, String id) {
-    final und = study.understandingCourse(id);
-    final chapters = study.chaptersOf(id);
-    return Card(
-      color: kSurface,
-      child: ExpansionTile(
-        title: Text(study.courses[id] ?? 'مادة $id', maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            LinearProgressIndicator(value: study.doneOf(id) / study.totalOf(id), color: kAccent),
-            const SizedBox(height: 4),
-            Text('${study.doneOf(id)}/${study.totalOf(id)} · ${(study.doneOf(id) * 100 / study.totalOf(id)).round()}%'
-                '${und != null ? ' · الفهم ${(und * 100).round()}%' : ''}',
-                style: const TextStyle(color: Colors.white54, fontSize: 12.5)),
-          ]),
-        ),
-        children: [
-          for (final ch in chapters) ...[
-            if (ch.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
-                child: Text(
-                    '$ch · ${study.countableOf(id).where((l) => l.sec == ch && study.isDone(l)).length}/${study.countableOf(id).where((l) => l.sec == ch).length}',
-                    style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700)),
-              ),
-            for (final l in study.countableOf(id).where((l) => l.sec == ch))
-              CheckboxListTile(
-                dense: true,
-                value: study.isDone(l),
-                onChanged: (_) => study.toggleDone(l),
-                secondary: Icon(groupIcon(l.group), color: l.group == 'yt' ? kAccent : null),
-                title: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                subtitle: study.understandingOf(l) == null
-                    ? null
-                    : Text('الفهم ${(study.understandingOf(l)! * 100).round()}%', style: const TextStyle(fontSize: 12)),
-              ),
-          ],
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: OutlinedButton.icon(
-              onPressed: () => downloadCourseVideos(c, id),
-              icon: const Icon(Icons.download),
-              label: const Text('تنزيل فيديوهات المادة كاملة'),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

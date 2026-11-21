@@ -225,10 +225,14 @@ class StudyStore extends ChangeNotifier {
   final daySecs = <String, int>{}; // yyyy-MM-dd -> study seconds (counted by the strict sessions)
   final daySessions = <String, int>{};
   final examLog = <Map<String, dynamic>>[]; // {at, cid, score, total}
-  DateTime deadline = DateTime(2026, 12, 2);
+  DateTime deadline = dayOnly(DateTime.now()).add(const Duration(days: 30));
   int dailyMinutes = 180;
   bool remindersOn = true;
-  String moodleHost = 'moodle.ucas.edu.ps';
+  String moodleHost = ''; // set at the first start (setup page) or in the settings
+  String themeMode = 'system'; // system / light / dark
+  final focusCourses = <String>{}; // plan only these courses (empty = all)
+  DateTime? focusUntil; // ... until this day
+  DateTime? lastSync; // when the Moodle links were last read
   bool loaded = false, fetching = false;
   int fetched = 0, toFetch = 0;
   String? notice; // shown when a damaged file was restored from the backup copy
@@ -243,6 +247,7 @@ class StudyStore extends ChangeNotifier {
       final f = File('$d/moodle_links.json');
       if (await f.exists()) {
         final j = jsonDecode(await f.readAsString()) as Map;
+        lastSync = DateTime.tryParse('${j['at']}');
         courses
           ..clear()
           ..addAll({for (final e in (j['courses'] as Map).entries) '${e.key}': '${e.value}'});
@@ -302,6 +307,11 @@ class StudyStore extends ChangeNotifier {
     dailyMinutes = (j['daily'] as num?)?.toInt() ?? dailyMinutes;
     remindersOn = j['rem'] as bool? ?? remindersOn;
     moodleHost = '${j['host'] ?? moodleHost}';
+    themeMode = '${j['theme'] ?? themeMode}';
+    focusCourses
+      ..clear()
+      ..addAll(((j['focus'] as List?) ?? []).map((e) => '$e'));
+    focusUntil = DateTime.tryParse('${j['focusUntil']}');
   }
 
   Map<String, dynamic> _state() => {
@@ -309,6 +319,9 @@ class StudyStore extends ChangeNotifier {
         'daily': dailyMinutes,
         'rem': remindersOn,
         'host': moodleHost,
+        'theme': themeMode,
+        'focus': focusCourses.toList(),
+        'focusUntil': focusUntil?.toIso8601String(),
         'done': done.toList(),
         'dur': dur,
         'notes': {for (final e in notes.entries) if (!e.value.isEmpty) e.key: e.value.toJson()},
@@ -356,7 +369,30 @@ class StudyStore extends ChangeNotifier {
     scheduleReminders();
   }
 
-  void setSettings({int? daily, bool? reminders, String? host}) {
+  /// The day the current plan ends: the focus period if one is set, else the general deadline
+  DateTime get planEnd => focusCourses.isNotEmpty && focusUntil != null ? focusUntil! : deadline;
+
+  /// Plan only [courses] and finish them by [until]
+  void setFocus(Set<String> courses, DateTime until) {
+    focusCourses
+      ..clear()
+      ..addAll(courses);
+    focusUntil = until;
+    saveSoon();
+    notifyListeners();
+    scheduleReminders();
+  }
+
+  void clearFocus() {
+    focusCourses.clear();
+    focusUntil = null;
+    saveSoon();
+    notifyListeners();
+    scheduleReminders();
+  }
+
+  void setSettings({int? daily, bool? reminders, String? host, String? theme}) {
+    if (theme != null) themeMode = theme;
     if (daily != null) dailyMinutes = daily;
     if (reminders != null) remindersOn = reminders;
     if (host != null && host.trim().isNotEmpty) moodleHost = host.trim().toLowerCase();
@@ -555,19 +591,21 @@ class StudyStore extends ChangeNotifier {
   /// If the work does not fit in the daily hours the result says how many minutes are missing (no impossible plan).
   PlanResult planFull() {
     final today = dayOnly(DateTime.now());
-    var days = deadline.difference(today).inDays + 1;
+    var days = planEnd.difference(today).inDays + 1;
     if (days < 1) days = 1;
+    final focus = focusCourses.isNotEmpty;
     final list = List.generate(days, (i) => PlanDay(DateTime(today.year, today.month, today.day + i)));
     var taskMin = 0;
     for (final a in agenda()) {
       if (a.done || a.when.isBefore(DateTime.now())) continue;
+      if (focus && a.cid.isNotEmpty && !focusCourses.contains(a.cid)) continue;
       final idx = (dayOnly(a.when).difference(today).inDays - 1).clamp(0, days - 1);
       final m = effortMin(a);
       list[idx].tasks.add(a);
       list[idx].minutes += m;
       taskMin += m;
     }
-    final todo = videoLinks().where((l) => !isDone(l)).toList();
+    final todo = videoLinks().where((l) => !isDone(l) && (!focus || focusCourses.contains(l.cid))).toList();
     int mins(MoodleLink l) => (secondsOf(l) / 60).ceil();
     final videoMin = todo.fold<int>(0, (s, l) => s + mins(l));
     final target = ((videoMin + taskMin) / days).ceil();
@@ -755,7 +793,9 @@ class StudyStore extends ChangeNotifier {
     daySessions.clear();
     examLog.clear();
     await clearLogin();
-    deadline = DateTime(2026, 12, 2);
+    deadline = dayOnly(DateTime.now()).add(const Duration(days: 30));
+    focusCourses.clear();
+    focusUntil = null;
     dailyMinutes = 180;
     scheduleReminders();
     notifyListeners();
@@ -789,10 +829,11 @@ Future<void> clearLogin() async {
 }
 
 /// Moodle address (the student can change it in the settings)
-String get moodleHome => 'https://${study.moodleHost}/';
+String get moodleHome => study.moodleHost.isEmpty ? '' : 'https://${study.moodleHost}/';
 
 bool isMoodleHost(String h) {
   final host = study.moodleHost;
+  if (host.isEmpty) return false;
   final parts = host.split('.');
   final parent = parts.length > 2 ? parts.skip(1).join('.') : host;
   return h == host || h.endsWith('.$parent');

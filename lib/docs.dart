@@ -344,7 +344,7 @@ class _DocViewerPageState extends State<DocViewerPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: kAccent.withOpacity(.2), borderRadius: BorderRadius.circular(12)),
-                  child: Text('شريحة ${i + 1}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)),
+                  child: Text('شريحة ${i + 1}', style: TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)),
                 ),
               ]),
               const SizedBox(height: 10),
@@ -399,7 +399,7 @@ class _DocViewerPageState extends State<DocViewerPage> {
                         Container(
                           width: 46,
                           alignment: Alignment.center,
-                          decoration: const BoxDecoration(color: kSurface2, border: Border(bottom: BorderSide(color: kOutline), right: BorderSide(color: kOutline))),
+                          decoration: BoxDecoration(color: kSurface2, border: Border(bottom: BorderSide(color: kOutline), right: BorderSide(color: kOutline))),
                           child: Text('${i + 1}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
                         ),
                         for (final v in rows[i])
@@ -410,7 +410,7 @@ class _DocViewerPageState extends State<DocViewerPage> {
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             decoration: BoxDecoration(
                               color: i == 0 ? kSurface2 : null,
-                              border: const Border(bottom: BorderSide(color: kOutline), right: BorderSide(color: kOutline)),
+                              border: Border(bottom: BorderSide(color: kOutline), right: BorderSide(color: kOutline)),
                             ),
                             child: Text(v, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: i == 0 ? FontWeight.w700 : null)),
                           ),
@@ -432,7 +432,7 @@ class _DocViewerPageState extends State<DocViewerPage> {
     return FutureBuilder(
       future: parsed,
       builder: (_, s) {
-        if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: kAccent));
+        if (s.connectionState != ConnectionState.done) return Center(child: CircularProgressIndicator(color: kAccent));
         if (s.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('تعذّر قراءة الملف\n${s.error}', textAlign: TextAlign.center)));
         final d = s.data;
         if (ext == '.txt') return SingleChildScrollView(padding: const EdgeInsets.all(18), child: _txt(d as String, style: TextStyle(fontSize: 16 * zoom, height: 1.7)));
@@ -593,7 +593,7 @@ class _DocsPageState extends State<DocsPage> {
         label: const Text('استيراد ملف'),
       ),
       body: !loaded
-          ? const Center(child: CircularProgressIndicator(color: kAccent))
+          ? Center(child: CircularProgressIndicator(color: kAccent))
           : files.isEmpty
               ? Center(
                   child: Padding(

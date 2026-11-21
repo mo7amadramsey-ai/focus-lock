@@ -7,6 +7,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'channel.dart';
 import 'downloads.dart';
 import 'storage.dart';
+import 'lock_ctl.dart';
 import 'lock_setup.dart';
 import 'strict_shell.dart';
 import 'theme.dart';
@@ -88,7 +89,7 @@ class _BrowserPageState extends State<BrowserPage> {
     final id = VideoId.parseVideoId(url);
     final target = 'https://m.youtube.com/watch?v=$id';
     final left = lockMs(d, extra); // never more than one hour
-    await ch.invokeMethod('startLock', {'left': left, 'type': 'web', 'target': target});
+    await lock.startVideo(left, 'web', target);
     if (!mounted) return;
     Navigator.pushReplacement(
         context, MaterialPageRoute(builder: (_) => StrictWebPage(url: target, leftMs: left)));
@@ -130,7 +131,7 @@ class _BrowserPageState extends State<BrowserPage> {
         },
         child: Scaffold(
         appBar: AppBar(
-          title: const Row(children: [
+          title: Row(children: [
             Icon(Icons.smart_display, color: kAccent),
             SizedBox(width: 10),
             Text('يوتيوب'),

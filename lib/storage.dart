@@ -351,9 +351,9 @@ Future<({String name, int? number})?> askNameNumber(BuildContext c,
           ),
         ]),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'إن كان الرقم مستخدماً، يُزاح ذلك الفيديو وما بعده خطوة واحدة (001 القديم يصير 002 وهكذا).',
-          style: TextStyle(fontSize: 12, color: Colors.white60),
+          style: TextStyle(fontSize: 12, color: kMuted),
         ),
       ]),
       actions: [

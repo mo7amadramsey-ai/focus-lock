@@ -14,7 +14,7 @@ class StatsTab extends StatelessWidget {
           Icon(i, color: kAccent),
           const SizedBox(height: 8),
           Text(v, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-          Text(t, style: const TextStyle(color: Colors.white54, fontSize: 12.5)),
+          Text(t, style: TextStyle(color: kMuted, fontSize: 12.5)),
         ]),
       );
 
@@ -61,22 +61,22 @@ class StatsTab extends StatelessWidget {
               for (var i = 0; i < 7; i++)
                 Expanded(
                   child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    Text(secs[i] == 0 ? '' : '${secs[i] ~/ 60}', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                    Text(secs[i] == 0 ? '' : '${secs[i] ~/ 60}', style: TextStyle(fontSize: 11, color: kMuted)),
                     const SizedBox(height: 2),
                     Container(
                       height: 6 + 70.0 * secs[i] / mx,
                       margin: const EdgeInsets.symmetric(horizontal: 6),
-                      decoration: BoxDecoration(color: secs[i] == 0 ? Colors.white12 : kAccent, borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(color: secs[i] == 0 ? kOutline : kAccent, borderRadius: BorderRadius.circular(6)),
                     ),
                     const SizedBox(height: 4),
-                    Text(dayName(week[i]).substring(0, 3), style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                    Text(dayName(week[i]).substring(0, 3), style: TextStyle(fontSize: 11, color: kMuted)),
                   ]),
                 ),
             ]),
           ),
           const SizedBox(height: 8),
-          Text('إجمالي وقت الدراسة المحسوب: ${fmtMinutes(total ~/ 60)}', style: const TextStyle(color: Colors.white54)),
-          const Text('يُحسب الوقت أثناء جلسات القفل فقط (والتشغيل الفعلي).', style: TextStyle(color: Colors.white38, fontSize: 12)),
+          Text('إجمالي وقت الدراسة المحسوب: ${fmtMinutes(total ~/ 60)}', style: TextStyle(color: kMuted)),
+          Text('يُحسب الوقت أثناء جلسات القفل فقط (والتشغيل الفعلي).', style: TextStyle(color: kFaint, fontSize: 12)),
         ]),
       ),
       if (study.examLog.isNotEmpty) ...[

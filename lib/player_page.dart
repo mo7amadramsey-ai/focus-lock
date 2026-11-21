@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'channel.dart';
 import 'docs.dart' show baseName;
+import 'lock_ctl.dart';
 import 'lock_setup.dart';
 import 'storage.dart';
 import 'strict_shell.dart';
@@ -279,7 +280,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           for (final s in _speeds)
             ListTile(
               title: Text(s == 1.0 ? 'عادي' : '${s}x'),
-              trailing: s == speed ? const Icon(Icons.check, color: kAccent) : null,
+              trailing: s == speed ? Icon(Icons.check, color: kAccent) : null,
               onTap: () => Navigator.pop(ctx, s),
             ),
         ]),
@@ -318,7 +319,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final extra = await confirmStrict(context, v.value.duration);
     if (extra == null) return;
     final left = lockMs(v.value.duration, extra); // never more than one hour
-    await ch.invokeMethod('startLock', {'left': left, 'type': 'local', 'target': path});
+    await lock.startVideo(left, 'local', path);
     if (!mounted) return;
     toStrict = true;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerPage(path: path, leftMs: left)));
@@ -590,7 +591,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       return Scaffold(appBar: AppBar(), body: Center(child: Text('تعذّر تشغيل الفيديو\n$error', textAlign: TextAlign.center)));
     }
     if (!ready) {
-      return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator(color: kAccent)));
+      return Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator(color: kAccent)));
     }
     final land = MediaQuery.orientationOf(c) == Orientation.landscape;
     // hide the system bars in landscape (normal mode; strict mode always hides them)

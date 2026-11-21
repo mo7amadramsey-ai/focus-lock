@@ -72,7 +72,7 @@ const crawlJs = r'''
       if (u.indexOf(base) !== 0) return false;
       var m = u.match(/\/course\/view\.php\?(?:.*&)?id=(\d+)/);
       if (m) return m[1] === cid;
-      return /\/mod\/(page|folder|book|resource|url|lesson|label|imscp|assign|quiz)\/view\.php/.test(u);
+      return /\/mod\/(page|folder|book|resource|url|lesson|label|imscp|assign|quiz|forum)\/view\.php/.test(u);
     }
     function push(u, cid, title, sec) {
       u = u.split("#")[0];
@@ -131,7 +131,12 @@ const crawlJs = r'''
         if (/pluginfile\.php/.test(u)) { emit(it.cid, /^(VIDEO|SOURCE)$/.test(e.tagName) ? "video" : "file", isA ? (title || fileName(u)) : fileName(u), u, "", sc); return; }
         if (/^(VIDEO|SOURCE)$/.test(e.tagName)) { emit(it.cid, "video", pt, u, "", sc); return; }
         if (isA) {
-          if (follow(u, it.cid)) { push(u, it.cid, title, sc); return; }
+          if (follow(u, it.cid)) {
+            // pages, books, lessons and forums are listed too (the app shows what Moodle shows)
+            if (/\/mod\/(page|book|lesson|forum|imscp)\/view\.php/.test(u)) emit(it.cid, "act", title, u, "", sc);
+            push(u, it.cid, title, sc);
+            return;
+          }
           if (/^https?:/.test(u) && u.indexOf(base) !== 0) emit(it.cid, "ext", title || u, u, "", sc);
         } else if (/^https?:/.test(u) && u.indexOf(base) !== 0) {
           emit(it.cid, "ext", title || u, u, "", sc);
@@ -166,7 +171,7 @@ class MoodleLink {
 
   // yt / pdf / doc / video / file / ext
   String get group {
-    if (kind == 'yt' || kind == 'ext') return kind;
+    if (kind == 'yt' || kind == 'ext' || kind == 'act') return kind;
     final p = (Uri.tryParse(url)?.path ?? url).toLowerCase();
     if (kind == 'video' || isVideo(p) || ct.startsWith('video/')) return 'video';
     if (p.endsWith('.pdf') || ct.contains('pdf')) return 'pdf';
@@ -316,6 +321,7 @@ IconData groupIcon(String g) => switch (g) {
       'doc' => Icons.description_outlined,
       'video' => Icons.play_circle_outline,
       'file' => Icons.insert_drive_file_outlined,
+      'act' => Icons.article_outlined,
       _ => Icons.link,
     };
 
@@ -387,7 +393,7 @@ class _LinksPageState extends State<LinksPage> {
           final order = [...c.courses.keys.where(byCourse.containsKey), ...byCourse.keys.where((k) => !c.courses.containsKey(k))];
           return Scaffold(
             appBar: AppBar(
-              title: const Row(children: [Icon(Icons.link, color: kAccent), SizedBox(width: 10), Text('روابط المودل')]),
+              title: Row(children: [Icon(Icons.link, color: kAccent), SizedBox(width: 10), Text('روابط المودل')]),
               actions: [
                 c.running
                     ? IconButton(tooltip: 'إيقاف', icon: const Icon(Icons.stop_circle_outlined), onPressed: c.stop)
@@ -396,11 +402,11 @@ class _LinksPageState extends State<LinksPage> {
             ),
             body: Column(children: [
               if (c.running) ...[
-                const LinearProgressIndicator(color: kAccent),
+                LinearProgressIndicator(color: kAccent),
                 Padding(
                   padding: const EdgeInsets.all(8),
                   child: Text('جاري الفحص... ${c.visited} صفحة · ${c.links.length} رابط · ${c.courses.length} مادة',
-                      style: const TextStyle(color: Colors.white70)),
+                      style: TextStyle(color: kSoft)),
                 ),
               ] else if (c.error != null)
                 Padding(
@@ -409,7 +415,7 @@ class _LinksPageState extends State<LinksPage> {
                       c.error == 'nocourses'
                           ? 'لم أجد موادك. سجّل الدخول من صفحة المودل ثم أعد المحاولة'
                           : 'توقف الاستخراج: ${c.error}',
-                      style: const TextStyle(color: kAccent)),
+                      style: TextStyle(color: kAccent)),
                 ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
@@ -439,10 +445,10 @@ class _LinksPageState extends State<LinksPage> {
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.travel_explore, size: 56, color: Colors.white38),
+                            Icon(Icons.travel_explore, size: 56, color: kFaint),
                             const SizedBox(height: 12),
-                            const Text('يقرأ التطبيق صفحات كل موادك ويستخرج الروابط فقط (يوتيوب، ملفات، فيديو) ويعرضها هنا',
-                                textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+                            Text('يقرأ التطبيق صفحات كل موادك ويستخرج الروابط فقط (يوتيوب، ملفات، فيديو) ويعرضها هنا',
+                                textAlign: TextAlign.center, style: TextStyle(color: kSoft)),
                             const SizedBox(height: 16),
                             FilledButton.icon(
                                 onPressed: _start, icon: const Icon(Icons.download_for_offline), label: const Text('ابدأ استخراج الروابط')),
@@ -457,14 +463,14 @@ class _LinksPageState extends State<LinksPage> {
                             title: Text(c.courses[id] ?? 'مادة $id', maxLines: 2, overflow: TextOverflow.ellipsis),
                             subtitle: Text(
                                 '${byCourse[id]!.length} رابط · منجز ${byCourse[id]!.where((l) => countable(l) && study.isDone(l)).length}/${byCourse[id]!.where(countable).length}',
-                                style: const TextStyle(color: Colors.white54)),
+                                style: TextStyle(color: kMuted)),
                             children: [
                               for (final l in byCourse[id]!)
                                 ListTile(
                                   dense: true,
                                   leading: Icon(_icon(l.group), color: l.group == 'yt' ? kAccent : null),
                                   title: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                  subtitle: Text(_groups[l.group] ?? '', style: const TextStyle(color: Colors.white54)),
+                                  subtitle: Text(_groups[l.group] ?? '', style: TextStyle(color: kMuted)),
                                   trailing: countable(l)
                                       ? Row(mainAxisSize: MainAxisSize.min, children: [
                                           IconButton(

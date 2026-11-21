@@ -1,47 +1,98 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_lock.dart';
-import 'nav.dart';
 import 'browser_page.dart';
-import 'channel.dart';
-import 'docs.dart';
-import 'library_page.dart';
+import 'lock_ctl.dart';
 import 'lock_modes.dart';
-import 'lock_setup.dart';
 import 'moodle_page.dart';
+import 'nav.dart';
 import 'player_page.dart';
-import 'storage.dart';
-import 'strict_shell.dart';
+import 'setup_page.dart';
+import 'shell.dart';
 import 'study.dart';
-import 'study_page.dart';
 import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await study.load(); // study data, settings and the Moodle address first
+  await lock.init(); // a strict session that was running comes back
   study.scheduleReminders();
-  homeBuilder = () => const Home();
+  homeBuilder = () => const MainShell();
   // Free rotation: landscape video / documents whenever you turn the phone
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);
   runApp(const App());
 }
 
-class App extends StatelessWidget {
+class App extends StatefulWidget {
   const App({super.key});
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    study.addListener(_theme);
+    _theme(first: true);
+  }
+
+  @override
+  void dispose() {
+    study.removeListener(_theme);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() => _theme();
+
+  // Day / night: follows the phone, or is forced from the settings
+  void _theme({bool first = false}) {
+    final sys = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    final d = study.themeMode == 'dark' || (study.themeMode == 'system' && sys);
+    if (d == Pal.dark && !first) return;
+    Pal.dark = d;
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: d ? Brightness.light : Brightness.dark,
+      systemNavigationBarColor: d ? const Color(0xFF1A1A1D) : Colors.white,
+      systemNavigationBarIconBrightness: d ? Brightness.light : Brightness.dark,
+    ));
+    if (!first) {
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) => rebuildAll());
+    }
+  }
+
   @override
   Widget build(BuildContext c) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Focus Lock',
         theme: buildTheme(),
         navigatorKey: navKey,
-        // Arabic RTL layout + the whole app is behind the phone's fingerprint / PIN
-        builder: (_, child) =>
-            Directionality(textDirection: TextDirection.rtl, child: AppLockGate(child: child!)),
+        // Arabic RTL layout, behind the phone's fingerprint / PIN, with the thin strict-mode bar on top of everything
+        builder: (ctx, child) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AppLockGate(
+            child: AnimatedBuilder(
+              animation: lock,
+              builder: (_, __) {
+                final bar = lock.active || lock.flash != null;
+                return Column(children: [
+                  const LockBanner(),
+                  Expanded(child: MediaQuery.removePadding(context: ctx, removeTop: bar, child: child!)),
+                ]);
+              },
+            ),
+          ),
+        ),
         home: const Boot(),
       );
 }
 
-// On launch: if a strict session is still running, jump straight back into it
+// On launch: first start -> setup; a video lock that was running -> back into that video; else the app
 class Boot extends StatefulWidget {
   const Boot({super.key});
   @override
@@ -52,206 +103,26 @@ class _BootState extends State<Boot> {
   @override
   void initState() {
     super.initState();
-    _resume();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _go());
   }
 
-  Future<void> _resume() async {
-    final s = await ch.invokeMapMethod<String, dynamic>('getSession');
+  void _go() {
     if (!mounted) return;
-    Widget next = const Home();
-    if (s != null) {
-      final left = (s['left'] as num).toInt();
-      final target = s['target'] as String;
-      next = s['type'] == 'web'
-          ? StrictWebPage(url: target, leftMs: left)
-          : s['type'] == 'moodle'
-              ? StrictMoodlePage(url: target, leftMs: left)
-              : s['type'] == 'playlist'
-                  ? PlaylistLockPage(ids: target.split(','), leftMs: left)
-                  : s['type'] == 'app'
-                      ? AppLockPage(leftMs: left)
-                      : PlayerPage(path: target, leftMs: left);
+    Widget next = const MainShell();
+    if (study.moodleHost.isEmpty) {
+      next = const SetupPage();
+    } else if (lock.vidOn) {
+      final t = lock.vidTarget, left = lock.vidLeft;
+      next = switch (lock.vidType) {
+        'web' => StrictWebPage(url: t, leftMs: left),
+        'moodle' => StrictMoodlePage(url: t, leftMs: left),
+        'playlist' => PlaylistLockPage(ids: t.split(','), leftMs: left),
+        _ => PlayerPage(path: t, leftMs: left),
+      };
     }
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => next));
   }
 
   @override
-  Widget build(BuildContext c) => const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: kAccent)),
-      );
-}
-
-// Home: header, status, 4 cards, how-it-works
-class Home extends StatefulWidget {
-  const Home({super.key});
-  @override
-  State<Home> createState() => _HomeState();
-}
-
-class _HomeState extends State<Home> {
-  bool? lockReady;
-
-  @override
-  void initState() {
-    super.initState();
-    _status();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _askStorage());
-  }
-
-  // Offer the public folder (survives uninstall, visible in file managers)
-  Future<void> _askStorage() async {
-    if (await hasAllFiles() || !mounted) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('حفظ الملفات خارج التطبيق'),
-        content: const Text(
-            'اسمح بالوصول لمجلد FocusLock على الجهاز لتبقى فيديوهاتك ومستنداتك محفوظة عند حذف التطبيق وإعادة تثبيته، '
-            'ولتضيف ملفات إليه من مدير الملفات فتظهر داخل التطبيق.\n\nالمسار: FocusLock/videos و FocusLock/documents'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('لاحقاً')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('السماح')),
-        ],
-      ),
-    );
-    if (ok == true) await ch.invokeMethod('requestAllFiles');
-  }
-
-  Future<void> _status() async {
-    try {
-      final owner = await ch.invokeMethod<bool>('isDeviceOwner') ?? false;
-      final acc = await ch.invokeMethod<bool>('isAccessibilityEnabled') ?? false;
-      if (mounted) setState(() => lockReady = owner || acc);
-    } catch (_) {}
-  }
-
-  Widget _tile(BuildContext c, IconData icon, String title, String sub, List<Color> colors, Widget page) => Material(
-        color: Colors.transparent,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: colors),
-            boxShadow: [BoxShadow(color: colors.last.withOpacity(.35), blurRadius: 18, offset: const Offset(0, 8))],
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(24),
-            onTap: () async {
-              await Navigator.push(c, MaterialPageRoute(builder: (_) => page));
-              _status();
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(16)),
-                  child: Icon(icon, color: Colors.white, size: 28),
-                ),
-                const Spacer(),
-                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
-                const SizedBox(height: 2),
-                Text(sub, style: const TextStyle(fontSize: 12, color: Colors.white70)),
-              ]),
-            ),
-          ),
-        ),
-      );
-
-  Widget _step(IconData i, String t, String s) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: kAccent.withOpacity(.15), borderRadius: BorderRadius.circular(12)),
-            child: Icon(i, color: kAccent, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(t, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 2),
-              Text(s, style: const TextStyle(color: Colors.white60, height: 1.5, fontSize: 13)),
-            ]),
-          ),
-        ]),
-      );
-
-  @override
-  Widget build(BuildContext c) => Scaffold(
-        body: SafeArea(
-          child: ListView(padding: const EdgeInsets.all(16), children: [
-            Row(children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  gradient: const LinearGradient(colors: [kAccent, Color(0xFFB71C1C)]),
-                  boxShadow: [BoxShadow(color: kAccent.withOpacity(.4), blurRadius: 16)],
-                ),
-                child: const Icon(Icons.lock_clock, color: Colors.white, size: 30),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Focus Lock', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                  Text('ذاكر بتركيز مطلق، بلا تشتت', style: TextStyle(color: Colors.white60)),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 16),
-            // Status chips
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              _chip(Icons.fingerprint, 'التطبيق محمي ببصمتك', Colors.greenAccent),
-              GestureDetector(
-                onTap: lockReady == false ? () => ensureLockReady(c).then((_) => _status()) : null,
-                child: _chip(
-                  lockReady == true ? Icons.verified_user : Icons.warning_amber_rounded,
-                  lockReady == true ? 'القفل الصارم جاهز' : (lockReady == null ? 'جاري الفحص' : 'فعّل القفل الصارم'),
-                  lockReady == true ? Colors.greenAccent : Colors.orangeAccent,
-                ),
-              ),
-            ]),
-            const SizedBox(height: 20),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 14,
-              childAspectRatio: 1.05,
-              children: [
-                _tile(c, Icons.smart_display, 'يوتيوب', 'متصفح مقيّد + تحميل', const [Color(0xFFFF4D4D), Color(0xFFB71C1C)], const BrowserPage()),
-                _tile(c, Icons.school, 'المودل', 'محاضرات ومستندات الجامعة', const [Color(0xFF3D7BFF), Color(0xFF1A3C9C)], const MoodlePage()),
-                _tile(c, Icons.video_library, 'الفيديوهات', 'المحمّلة حسب المواد', const [Color(0xFF8E44FF), Color(0xFF4A1C9C)], const LibraryPage()),
-                _tile(c, Icons.description, 'المستندات', 'PDF وWord وExcel وPowerPoint', const [Color(0xFF16A085), Color(0xFF0B5345)], const DocsPage()),
-                _tile(c, Icons.event_note, 'المرشد الدراسي', 'خطة وتقدم ودفتر واختبارات', const [Color(0xFFF39C12), Color(0xFF9C640C)], const StudyPage()),
-                _tile(c, Icons.lock_clock, 'أنواع القفل', 'التطبيق · المجلد · الفيديو', const [Color(0xFF2C3E50), Color(0xFF111A24)], const LockHubPage()),
-              ],
-            ),
-            const SizedBox(height: 22),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: cardBox(22),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('كيف يعمل الوضع الصارم', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                _step(Icons.play_circle_outline, 'افتح فيديو', 'من يوتيوب أو المودل أو الفيديوهات المحمّلة، ثم اضغط "الوضع الصارم".'),
-                _step(Icons.more_time, 'مدة القفل = مدة الفيديو', 'ويمكنك إضافة وقت إضافي قبل البدء أو أثناءه.'),
-                _step(Icons.timer_off, 'عند انتهاء الوقت', 'لا يُغلق الفيديو، بل يُعرض عليك تمديد فترة التركيز.'),
-              ]),
-            ),
-          ]),
-        ),
-      );
-
-  Widget _chip(IconData i, String t, Color col) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(color: col.withOpacity(.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: col.withOpacity(.4))),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(i, size: 16, color: col),
-          const SizedBox(width: 6),
-          Text(t, style: TextStyle(color: col, fontSize: 12.5, fontWeight: FontWeight.w600)),
-        ]),
-      );
+  Widget build(BuildContext c) => Scaffold(body: Center(child: CircularProgressIndicator(color: kAccent)));
 }

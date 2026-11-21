@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'channel.dart';
+import 'study.dart';
 import 'storage.dart';
 import 'theme.dart';
 
@@ -101,7 +102,7 @@ class DownloadManager extends ChangeNotifier {
         final req = await client.getUrl(u);
         req.followRedirects = false;
         req.headers.set('User-Agent', 'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36');
-        if (u.host.endsWith('ucas.edu.ps')) {
+        if (isMoodleHost(u.host)) {
           final ck = await cookiesFor(u.toString());
           if (ck.isNotEmpty) req.headers.set('Cookie', ck);
         }
@@ -264,7 +265,7 @@ class DownloadsPage extends StatelessWidget {
     final color = switch (t.state) {
       DlState.done => Colors.greenAccent,
       DlState.failed || DlState.cancelled => Colors.orangeAccent,
-      _ => Colors.white60,
+      _ => kMuted,
     };
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -275,10 +276,10 @@ class DownloadsPage extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text('إلى: ${_folder(t)}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            Text('إلى: ${_folder(t)}', style: TextStyle(color: kMuted, fontSize: 12)),
             if (t.active) ...[
               const SizedBox(height: 8),
-              LinearProgressIndicator(value: t.progress, color: kAccent, backgroundColor: Colors.white12, minHeight: 4),
+              LinearProgressIndicator(value: t.progress, color: kAccent, backgroundColor: kOutline, minHeight: 4),
             ],
             const SizedBox(height: 6),
             Text(statusText, style: TextStyle(color: color, fontSize: 12)),
@@ -307,7 +308,7 @@ class DownloadsPage extends StatelessWidget {
             ],
           ),
           body: dl.tasks.isEmpty
-              ? const Center(child: Text('لا توجد تحميلات', style: TextStyle(color: Colors.white54)))
+              ? Center(child: Text('لا توجد تحميلات', style: TextStyle(color: kMuted)))
               : ListView(padding: const EdgeInsets.all(12), children: [for (final t in dl.tasks) _card(c, t)]),
         ),
       );

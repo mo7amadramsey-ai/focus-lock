@@ -73,7 +73,7 @@ class _NotebookTabState extends State<NotebookTab> {
                     subtitle: study.understandingOf(l) == null ? null : Text('الفهم ${(study.understandingOf(l)! * 100).round()}%', style: const TextStyle(fontSize: 12)),
                     trailing: (study.noteOf(l)?.isEmpty ?? true)
                         ? null
-                        : Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.edit_note, color: kAccent), Text('${study.noteOf(l)!.qs.length}')]),
+                        : Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.edit_note, color: kAccent), Text('${study.noteOf(l)!.qs.length}')]),
                     onTap: () => openNotebook(c, l),
                   ),
               ],
@@ -103,7 +103,7 @@ class MistakesPage extends StatelessWidget {
             child: ListTile(
               title: Text(r.qa.q),
               subtitle: Text('الإجابة: ${r.qa.a}\n${r.link != null ? 'المصدر: ${r.link!.title}\n' : ''}أخطأت ${r.qa.wrong} مرة',
-                  style: const TextStyle(color: Colors.white54, height: 1.5)),
+                  style: TextStyle(color: kMuted, height: 1.5)),
               onTap: r.link == null ? null : () => openNotebook(c, r.link!),
             ),
           ),
@@ -154,9 +154,9 @@ class _ExamLabPageState extends State<ExamLabPage> {
           icon: const Icon(Icons.play_arrow),
           label: const Text('ابدأ الامتحان'),
         ),
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(top: 10),
-          child: Text('الأسئلة من دفاترك فقط، وفي النهاية ترى محاضرة كل خطأ لتراجعها.', style: TextStyle(color: Colors.white54, height: 1.5)),
+          child: Text('الأسئلة من دفاترك فقط، وفي النهاية ترى محاضرة كل خطأ لتراجعها.', style: TextStyle(color: kMuted, height: 1.5)),
         ),
       ]),
     );
