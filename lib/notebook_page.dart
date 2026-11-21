@@ -43,7 +43,7 @@ Future<QA?> askQuestion(BuildContext c) async {
                   Radio<int>(value: i, groupValue: ci, onChanged: (v) => set(() => ci = v ?? 0)),
                   Expanded(child: TextField(controller: opts[i], decoration: InputDecoration(hintText: 'الخيار ${i + 1}'))),
                 ]),
-            if (type == 'mcq') const Text('اختر الدائرة بجانب الإجابة الصحيحة', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            if (type == 'mcq') Text('اختر الدائرة بجانب الإجابة الصحيحة', style: TextStyle(color: kMuted, fontSize: 12)),
           ]),
         ),
         actions: [
@@ -225,7 +225,7 @@ class _NotebookPageState extends State<NotebookPage> {
               leading: Chip(label: Text(fmtClock(note.stamps[i].s))),
               title: Text(note.stamps[i].text),
               subtitle: Text(note.stamps[i].src == 'lecturer' ? 'من كلام المحاضر (ترجمة الفيديو)' : 'ملاحظتي',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  style: TextStyle(color: kMuted, fontSize: 12)),
               onTap: () => Navigator.push(
                   c, MaterialPageRoute(builder: (_) => PreviewPage(url: _stampUrl(id, note.stamps[i].s), title: widget.link.title))),
               trailing: IconButton(
@@ -256,7 +256,7 @@ class _NotebookPageState extends State<NotebookPage> {
         if (note.qs.isEmpty)
           const Padding(
             padding: EdgeInsets.all(12),
-            child: Text('أضف أسئلة من المحاضرة لتختبر نفسك عليها لاحقاً', style: TextStyle(color: Colors.white54)),
+            child: Text('أضف أسئلة من المحاضرة لتختبر نفسك عليها لاحقاً', style: TextStyle(color: kMuted)),
           ),
         for (var i = 0; i < note.qs.length; i++)
           Card(
@@ -264,7 +264,7 @@ class _NotebookPageState extends State<NotebookPage> {
             child: ListTile(
               title: Text(note.qs[i].q),
               subtitle: Text('${note.qs[i].a}${note.qs[i].right + note.qs[i].wrong > 0 ? '\nصح ${note.qs[i].right} · خطأ ${note.qs[i].wrong}' : ''}',
-                  style: const TextStyle(color: Colors.white54)),
+                  style: TextStyle(color: kMuted)),
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline),
                 onPressed: () {
@@ -426,7 +426,7 @@ class _QuizPageState extends State<QuizPage> {
               color: kSurface,
               child: ListTile(
                 title: Text(r.qa.q),
-                subtitle: Text('الإجابة: ${r.qa.a}${r.link != null ? '\nالمصدر: ${r.link!.title}' : ''}', style: const TextStyle(color: Colors.white54)),
+                subtitle: Text('الإجابة: ${r.qa.a}${r.link != null ? '\nالمصدر: ${r.link!.title}' : ''}', style: TextStyle(color: kMuted)),
                 onTap: r.link == null ? null : () => Navigator.push(c, MaterialPageRoute(builder: (_) => NotebookPage(link: r.link!))),
               ),
             ),
@@ -461,7 +461,7 @@ class _QuizPageState extends State<QuizPage> {
           decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(22)),
           child: SingleChildScrollView(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (r.link != null) Text(r.link!.title, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+              if (r.link != null) Text(r.link!.title, style: TextStyle(color: kFaint, fontSize: 12)),
               const SizedBox(height: 6),
               Text(q.q, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, height: 1.5)),
               if (choice) ...[
@@ -488,7 +488,7 @@ class _QuizPageState extends State<QuizPage> {
               ],
               if (!choice && show) ...[
                 const Divider(height: 32),
-                Text(q.a.isEmpty ? '(لا توجد إجابة مكتوبة)' : q.a, style: const TextStyle(fontSize: 17, color: Colors.white70, height: 1.6)),
+                Text(q.a.isEmpty ? '(لا توجد إجابة مكتوبة)' : q.a, style: TextStyle(fontSize: 17, color: kSoft, height: 1.6)),
               ],
             ]),
           ),

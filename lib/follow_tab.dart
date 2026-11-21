@@ -26,7 +26,7 @@ class FollowTab extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 8),
           child: Text('لم تُقرأ واجبات من المودل بعد. أعد «استخراج الروابط» من صفحة المودل، أو أضف مواعيدك يدوياً من التقويم.',
-              style: TextStyle(color: Colors.white54, height: 1.5)),
+              style: TextStyle(color: kMuted, height: 1.5)),
         ),
       for (final a in open)
         InkWell(
@@ -34,7 +34,7 @@ class FollowTab extends StatelessWidget {
           child: agendaTile(a),
         ),
       if (fin.isNotEmpty) ...[
-        const Padding(padding: EdgeInsets.only(top: 12), child: Text('منجز', style: TextStyle(color: Colors.white54))),
+        Padding(padding: EdgeInsets.only(top: 12), child: Text('منجز', style: TextStyle(color: kMuted))),
         for (final a in fin) agendaTile(a),
       ],
       const Divider(height: 28),
@@ -42,7 +42,7 @@ class FollowTab extends StatelessWidget {
       if (byDay.isEmpty)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text('لا جديد بعد. عند كل مزامنة للمودل تظهر هنا العناصر الجديدة.', style: TextStyle(color: Colors.white54)),
+          child: Text('لا جديد بعد. عند كل مزامنة للمودل تظهر هنا العناصر الجديدة.', style: TextStyle(color: kMuted)),
         ),
       for (final e in byDay.entries) ...[
         Padding(padding: const EdgeInsets.only(top: 10), child: Text(dayLabel(e.value.first.at), style: const TextStyle(color: kAccent))),
@@ -52,7 +52,7 @@ class FollowTab extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             leading: Icon(groupIcon(f.kind == 'yt' || f.kind == 'pdf' || f.kind == 'doc' || f.kind == 'video' || f.kind == 'file' ? f.kind : 'ext')),
             title: Text(f.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-            subtitle: Text(study.courses[f.cid] ?? '', style: const TextStyle(color: Colors.white54)),
+            subtitle: Text(study.courses[f.cid] ?? '', style: TextStyle(color: kMuted)),
             onTap: () {
               if (f.kind == 'yt') {
                 Navigator.push(c, MaterialPageRoute(builder: (_) => PreviewPage(url: f.url, title: f.title, youtubeId: null)));

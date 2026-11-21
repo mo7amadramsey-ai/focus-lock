@@ -53,7 +53,7 @@ Future<void> startAppLock(BuildContext c) async {
           const Text('قفل التطبيق كله', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           const Text('تتصفح داخل التطبيق بحرية، وكل التطبيقات والنوافذ العائمة الأخرى محجوبة. لا يوجد مخرج طوارئ، والتمديد فقط. الحد الأقصى 3 ساعات.',
-              style: TextStyle(color: Colors.white60, height: 1.5)),
+              style: TextStyle(color: kMuted, height: 1.5)),
           const SizedBox(height: 16),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final m in [30, 60, 90, 120, 180])
@@ -342,7 +342,7 @@ class _LockHubPageState extends State<LockHubPage> {
         appBar: AppBar(title: const Row(children: [Icon(Icons.lock_clock, color: kAccent), SizedBox(width: 10), Text('أنواع القفل')])),
         body: ListView(padding: const EdgeInsets.all(14), children: [
           const Text('لا يوجد مخرج طوارئ في أي نوع. المدة تُمدَّد فقط ولا تُقصَّر. عند انتهاء الوقت لا يُغلق شيء، بل يُعرض عليك التمديد.',
-              style: TextStyle(color: Colors.white60, height: 1.6)),
+              style: TextStyle(color: kMuted, height: 1.6)),
           const SizedBox(height: 12),
           _card(Icons.phone_android, 'قفل التطبيق كله', 'تتنقل داخل التطبيق بحرية والباقي محجوب. حتى 3 ساعات.', () => startAppLock(c)),
           _card(Icons.folder_special, 'قفل مجلد / قائمة تشغيل', 'فيديوهات مادة واحدة متتابعة، مدة القفل مجموع مددها. حتى ساعة ونصف.', _pickCourse),

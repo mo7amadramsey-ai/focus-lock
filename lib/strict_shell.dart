@@ -181,48 +181,50 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
         ],
       ];
 
+  // "ساعة و5 دقائق" / "5 دقائق" / "40 ثانية": remaining time in plain words
+  String _human(Duration d) {
+    final tm = (d.inMilliseconds / 60000).ceil();
+    if (tm <= 0) return 'أقل من دقيقة';
+    if (d.inSeconds < 60) return '${d.inSeconds} ثانية';
+    String mins(int m) => m == 1 ? 'دقيقة' : (m == 2 ? 'دقيقتان' : (m <= 10 ? '$m دقائق' : '$m دقيقة'));
+    String hrs(int h) => h == 1 ? 'ساعة' : (h == 2 ? 'ساعتان' : '$h ساعات');
+    final h = tm ~/ 60, m = tm % 60;
+    if (h == 0) return mins(m);
+    return m == 0 ? hrs(h) : '${hrs(h)} و${mins(m)}';
+  }
+
+  // Slim status strip at the top: the whole app below it stays fully usable
   Widget _fullHeader(double progress) {
     final ended = expired || unlocked;
+    final label = unlocked
+        ? 'بدون قفل'
+        : (expired
+            ? 'انتهى وقت الوضع الصارم'
+            : 'الوضع الصارم قيد التنفيذ · بقي ${_human(left)}${counting ? '' : (!_focus ? ' · متوقف' : ' · متوقف مؤقتاً')}');
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 2, 6, 2),
       decoration: BoxDecoration(
         color: kSurface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ended ? Colors.greenAccent.withOpacity(.4) : kOutline),
+        border: Border(bottom: BorderSide(color: ended ? Colors.greenAccent.withOpacity(.5) : kOutline)),
       ),
       child: Row(children: [
-        SizedBox(
-          width: 54,
-          height: 54,
-          child: Stack(alignment: Alignment.center, children: [
-            SizedBox(
-              width: 54,
-              height: 54,
-              child: CircularProgressIndicator(
-                value: ended ? 1 : progress,
-                strokeWidth: 5,
-                color: ended ? Colors.greenAccent : kAccent,
-                backgroundColor: Colors.white12,
-              ),
-            ),
-            Icon(ended ? Icons.lock_open : Icons.lock, size: 20, color: Colors.white70),
-          ]),
-        ),
-        const SizedBox(width: 14),
+        Icon(ended ? Icons.lock_open : Icons.lock_outline, size: 16, color: ended ? Colors.greenAccent : kAccent),
+        const SizedBox(width: 8),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-              unlocked ? 'بدون قفل' : (expired ? 'انتهى وقت التركيز' : (counting ? 'الوضع الصارم' : (!_focus ? 'متوقف — أغلق النوافذ العائمة' : 'متوقف — شغّل الفيديو'))),
-              style: const TextStyle(color: Colors.white60, fontSize: 13),
-            ),
-            Text(
-              ended ? (unlocked ? 'أحسنت' : '00:00:00') : _fmt(left),
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()]),
-            ),
-          ]),
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: kSoft, fontSize: 13, fontWeight: FontWeight.w600)),
         ),
-        ..._actions(),
+        ..._actions(small: true).map((w) => w is IconButton
+            ? IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 20,
+                onPressed: w.onPressed,
+                icon: w.icon,
+                tooltip: w.tooltip,
+              )
+            : w),
       ]),
     );
   }
@@ -236,7 +238,7 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
         Icon(ended ? Icons.lock_open : (counting ? Icons.lock : Icons.pause_circle), size: 16, color: ended ? Colors.greenAccent : (counting ? kAccent : Colors.orangeAccent)),
         const SizedBox(width: 6),
         Text(ended ? 'انتهى' : _fmt(left),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()])),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()])),
         const SizedBox(width: 4),
         ..._actions(small: true).map((w) => w is IconButton
             ? IconButton(
@@ -262,11 +264,11 @@ class _StrictShellState extends State<StrictShell> with WidgetsBindingObserver {
         if (!didPop && (expired || unlocked)) _finish();
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: land ? Colors.black : kBg,
         body: _guard(land
             ? Stack(children: [
                 Positioned.fill(child: child),
-                Positioned(top: 4, left: 8, child: SafeArea(child: _compactBar())),
+                Positioned(top: 4, left: 8, child: SafeArea(child: Theme(data: ThemeData.dark(useMaterial3: true), child: _compactBar()))),
               ])
             : SafeArea(
                 child: Column(children: [

@@ -367,7 +367,7 @@ class _MoodlePageState extends State<MoodlePage> {
                       color: it['kind'] == 'yt' ? kAccent : null),
                   title: Text('${it['title']}', maxLines: 2, overflow: TextOverflow.ellipsis),
                   subtitle: Text(it['kind'] == 'yt' ? 'يوتيوب' : (it['kind'] == 'video' ? 'فيديو' : 'مشغّل خارجي'),
-                      style: const TextStyle(color: Colors.white54)),
+                      style: TextStyle(color: kMuted)),
                   onTap: () => Navigator.pop(ctx, it),
                 ),
               ListTile(

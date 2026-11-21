@@ -103,7 +103,7 @@ class MistakesPage extends StatelessWidget {
             child: ListTile(
               title: Text(r.qa.q),
               subtitle: Text('الإجابة: ${r.qa.a}\n${r.link != null ? 'المصدر: ${r.link!.title}\n' : ''}أخطأت ${r.qa.wrong} مرة',
-                  style: const TextStyle(color: Colors.white54, height: 1.5)),
+                  style: TextStyle(color: kMuted, height: 1.5)),
               onTap: r.link == null ? null : () => openNotebook(c, r.link!),
             ),
           ),
@@ -156,7 +156,7 @@ class _ExamLabPageState extends State<ExamLabPage> {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 10),
-          child: Text('الأسئلة من دفاترك فقط، وفي النهاية ترى محاضرة كل خطأ لتراجعها.', style: TextStyle(color: Colors.white54, height: 1.5)),
+          child: Text('الأسئلة من دفاترك فقط، وفي النهاية ترى محاضرة كل خطأ لتراجعها.', style: TextStyle(color: kMuted, height: 1.5)),
         ),
       ]),
     );

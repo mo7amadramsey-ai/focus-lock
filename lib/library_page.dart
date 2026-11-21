@@ -122,7 +122,7 @@ class _LibraryPageState extends State<LibraryPage> {
                     leading: Icon(e is Directory ? Icons.folder : Icons.play_circle, color: kAccent, size: 30),
                     subtitle: e is File
                         ? Text('#${items.whereType<File>().toList().indexOf(e) + 1}  •  ${(e.lengthSync() / 1048576).toStringAsFixed(1)} MB',
-                            style: const TextStyle(color: Colors.white54))
+                            style: TextStyle(color: kMuted))
                         : null,
                     title: Text(e is File ? nameOf(e).replaceAll(RegExp(r'\.[A-Za-z0-9]+$'), '') : nameOf(e)),
                     onTap: () async {

@@ -400,7 +400,7 @@ class _LinksPageState extends State<LinksPage> {
                 Padding(
                   padding: const EdgeInsets.all(8),
                   child: Text('جاري الفحص... ${c.visited} صفحة · ${c.links.length} رابط · ${c.courses.length} مادة',
-                      style: const TextStyle(color: Colors.white70)),
+                      style: TextStyle(color: kSoft)),
                 ),
               ] else if (c.error != null)
                 Padding(
@@ -439,10 +439,10 @@ class _LinksPageState extends State<LinksPage> {
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.travel_explore, size: 56, color: Colors.white38),
+                            Icon(Icons.travel_explore, size: 56, color: kFaint),
                             const SizedBox(height: 12),
                             const Text('يقرأ التطبيق صفحات كل موادك ويستخرج الروابط فقط (يوتيوب، ملفات، فيديو) ويعرضها هنا',
-                                textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+                                textAlign: TextAlign.center, style: TextStyle(color: kSoft)),
                             const SizedBox(height: 16),
                             FilledButton.icon(
                                 onPressed: _start, icon: const Icon(Icons.download_for_offline), label: const Text('ابدأ استخراج الروابط')),
@@ -457,14 +457,14 @@ class _LinksPageState extends State<LinksPage> {
                             title: Text(c.courses[id] ?? 'مادة $id', maxLines: 2, overflow: TextOverflow.ellipsis),
                             subtitle: Text(
                                 '${byCourse[id]!.length} رابط · منجز ${byCourse[id]!.where((l) => countable(l) && study.isDone(l)).length}/${byCourse[id]!.where(countable).length}',
-                                style: const TextStyle(color: Colors.white54)),
+                                style: TextStyle(color: kMuted)),
                             children: [
                               for (final l in byCourse[id]!)
                                 ListTile(
                                   dense: true,
                                   leading: Icon(_icon(l.group), color: l.group == 'yt' ? kAccent : null),
                                   title: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                  subtitle: Text(_groups[l.group] ?? '', style: const TextStyle(color: Colors.white54)),
+                                  subtitle: Text(_groups[l.group] ?? '', style: TextStyle(color: kMuted)),
                                   trailing: countable(l)
                                       ? Row(mainAxisSize: MainAxisSize.min, children: [
                                           IconButton(

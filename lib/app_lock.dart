@@ -127,7 +127,7 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
                     const Text('Focus Lock', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     const Text('التطبيق مقفل. افتحه ببصمتك أو رمز هاتفك',
-                        textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, height: 1.5)),
+                        textAlign: TextAlign.center, style: TextStyle(color: kMuted, height: 1.5)),
                     const SizedBox(height: 28),
                     FilledButton.icon(
                       onPressed: _authenticate,

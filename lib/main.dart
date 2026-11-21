@@ -19,6 +19,7 @@ import 'theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await study.load(); // study data, settings and the Moodle address first
+  applyThemeMode(study.themeMode);
   study.scheduleReminders();
   homeBuilder = () => const Home();
   // Free rotation: landscape video / documents whenever you turn the phone
@@ -26,13 +27,41 @@ Future<void> main() async {
   runApp(const App());
 }
 
-class App extends StatelessWidget {
+class App extends StatefulWidget {
   const App({super.key});
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // 'system' mode follows the phone's day / night setting live
+  @override
+  void didChangePlatformBrightness() {
+    if (kThemeMode != 'system') return;
+    applyThemeMode('system');
+    setState(() {});
+    repaintAll();
+  }
+
   @override
   Widget build(BuildContext c) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Focus Lock',
         theme: buildTheme(),
+        themeMode: kDarkMode ? ThemeMode.dark : ThemeMode.light,
+        darkTheme: buildTheme(),
         navigatorKey: navKey,
         // Arabic RTL layout + the whole app is behind the phone's fingerprint / PIN
         builder: (_, child) =>
@@ -170,7 +199,7 @@ class _HomeState extends State<Home> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(t, style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
-              Text(s, style: const TextStyle(color: Colors.white60, height: 1.5, fontSize: 13)),
+              Text(s, style: TextStyle(color: kMuted, height: 1.5, fontSize: 13)),
             ]),
           ),
         ]),
@@ -195,7 +224,7 @@ class _HomeState extends State<Home> {
               const Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('Focus Lock', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                  Text('ذاكر بتركيز مطلق، بلا تشتت', style: TextStyle(color: Colors.white60)),
+                  Text('ذاكر بتركيز مطلق، بلا تشتت', style: TextStyle(color: kMuted)),
                 ]),
               ),
             ]),

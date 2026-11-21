@@ -264,7 +264,7 @@ class DownloadsPage extends StatelessWidget {
     final color = switch (t.state) {
       DlState.done => Colors.greenAccent,
       DlState.failed || DlState.cancelled => Colors.orangeAccent,
-      _ => Colors.white60,
+      _ => kMuted,
     };
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -275,10 +275,10 @@ class DownloadsPage extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text('إلى: ${_folder(t)}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            Text('إلى: ${_folder(t)}', style: TextStyle(color: kMuted, fontSize: 12)),
             if (t.active) ...[
               const SizedBox(height: 8),
-              LinearProgressIndicator(value: t.progress, color: kAccent, backgroundColor: Colors.white12, minHeight: 4),
+              LinearProgressIndicator(value: t.progress, color: kAccent, backgroundColor: kLine, minHeight: 4),
             ],
             const SizedBox(height: 6),
             Text(statusText, style: TextStyle(color: color, fontSize: 12)),
@@ -307,7 +307,7 @@ class DownloadsPage extends StatelessWidget {
             ],
           ),
           body: dl.tasks.isEmpty
-              ? const Center(child: Text('لا توجد تحميلات', style: TextStyle(color: Colors.white54)))
+              ? Center(child: Text('لا توجد تحميلات', style: TextStyle(color: kMuted)))
               : ListView(padding: const EdgeInsets.all(12), children: [for (final t in dl.tasks) _card(c, t)]),
         ),
       );

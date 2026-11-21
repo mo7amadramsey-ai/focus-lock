@@ -1,29 +1,57 @@
 import 'package:flutter/material.dart';
 
-// Shared look of the whole app (dark, calm, red accent)
+// Shared look of the whole app: dark and light, calm, red accent.
+// The palette is read through getters so the whole UI can switch live.
 const kAccent = Color(0xFFFF4D4D);
-const kBg = Color(0xFF0E0E10);
-const kSurface = Color(0xFF1A1A1D);
-const kSurface2 = Color(0xFF26262A);
-const kOutline = Color(0xFF2E2E33);
+
+/// 'dark' | 'light' | 'system' (saved in the study settings)
+String kThemeMode = 'dark';
+bool kDarkMode = true;
+
+Color get kBg => kDarkMode ? const Color(0xFF0E0E10) : const Color(0xFFF5F5F8);
+Color get kSurface => kDarkMode ? const Color(0xFF1A1A1D) : const Color(0xFFFFFFFF);
+Color get kSurface2 => kDarkMode ? const Color(0xFF26262A) : const Color(0xFFECECF1);
+Color get kOutline => kDarkMode ? const Color(0xFF2E2E33) : const Color(0xFFDADAE1);
+Color get kMuted => kDarkMode ? Colors.white60 : Colors.black54;
+Color get kSoft => kDarkMode ? Colors.white70 : Colors.black87;
+Color get kFaint => kDarkMode ? Colors.white38 : Colors.black38;
+Color get kLine => kDarkMode ? Colors.white24 : Colors.black12;
+Color get kText => kDarkMode ? Colors.white : const Color(0xFF16161A);
+
+/// Resolves the saved mode (and the phone's own setting for 'system') into kDarkMode
+void applyThemeMode(String mode) {
+  kThemeMode = mode;
+  kDarkMode = mode == 'dark' ||
+      (mode == 'system' &&
+          WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
+}
+
+/// Rebuilds every mounted widget so the new palette shows immediately, keeping navigation state
+void repaintAll() {
+  void visit(Element e) {
+    e.markNeedsBuild();
+    e.visitChildren(visit);
+  }
+
+  WidgetsBinding.instance.rootElement?.visitChildren(visit);
+}
 
 ThemeData buildTheme() {
-  final base = ThemeData.dark(useMaterial3: true);
+  final base = kDarkMode ? ThemeData.dark(useMaterial3: true) : ThemeData.light(useMaterial3: true);
   final shape24 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(24));
+  final scheme = kDarkMode
+      ? ColorScheme.dark(primary: kAccent, secondary: kAccent, surface: kSurface, surfaceContainerHighest: kSurface2)
+      : ColorScheme.light(primary: kAccent, secondary: kAccent, surface: kSurface, surfaceContainerHighest: kSurface2);
   return base.copyWith(
     scaffoldBackgroundColor: kBg,
-    colorScheme: const ColorScheme.dark(
-      primary: kAccent,
-      secondary: kAccent,
-      surface: kSurface,
-      surfaceContainerHighest: kSurface2,
-    ),
-    appBarTheme: const AppBarTheme(
+    colorScheme: scheme,
+    appBarTheme: AppBarTheme(
       backgroundColor: kBg,
+      foregroundColor: kText,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
+      titleTextStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: kText),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -36,8 +64,8 @@ ThemeData buildTheme() {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.white,
-        side: const BorderSide(color: kOutline),
+        foregroundColor: kText,
+        side: BorderSide(color: kOutline),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         shape: shape24,
       ),
@@ -47,19 +75,20 @@ ThemeData buildTheme() {
       selectedColor: kAccent.withOpacity(.25),
       side: BorderSide.none,
       shape: const StadiumBorder(),
-      labelStyle: const TextStyle(color: Colors.white),
+      labelStyle: TextStyle(color: kText),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: kSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
-    bottomSheetTheme: const BottomSheetThemeData(
+    bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: kSurface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: kSurface2,
+      backgroundColor: kDarkMode ? kSurface2 : const Color(0xFF2A2A30),
+      contentTextStyle: const TextStyle(color: Colors.white),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
     inputDecorationTheme: InputDecorationTheme(

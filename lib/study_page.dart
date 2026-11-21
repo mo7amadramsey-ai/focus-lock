@@ -33,7 +33,7 @@ class _StudyPageState extends State<StudyPage> {
 
   @override
   Widget build(BuildContext c) => DefaultTabController(
-        length: 7,
+        length: 5,
         child: Scaffold(
           appBar: AppBar(
             title: const Row(children: [Icon(Icons.event_note, color: kAccent), SizedBox(width: 10), Text('المرشد الدراسي')]),
@@ -44,11 +44,9 @@ class _StudyPageState extends State<StudyPage> {
                 onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const StudySettingsPage())),
               ),
             ],
-            bottom: const TabBar(isScrollable: true, tabAlignment: TabAlignment.start, tabs: [
+            bottom: const TabBar(tabs: [
               Tab(text: 'اليوم'),
               Tab(text: 'الخطة'),
-              Tab(text: 'التقويم'),
-              Tab(text: 'المتابعة'),
               Tab(text: 'التقدم'),
               Tab(text: 'الدفتر'),
               Tab(text: 'الإحصاءات'),
@@ -58,10 +56,8 @@ class _StudyPageState extends State<StudyPage> {
             animation: study,
             builder: (_, __) => TabBarView(children: [
               const TodayTab(),
-              const PlanTab(),
-              const CalendarTab(),
-              const FollowTab(),
-              const ProgressTab(),
+              const _Pair(labels: ['الخطة', 'التقويم'], pages: [PlanTab(), CalendarTab()]),
+              const _Pair(labels: ['التقدم', 'المتابعة'], pages: [ProgressTab(), FollowTab()]),
               const NotebookTab(),
               const StatsTab(),
             ]),
@@ -74,10 +70,10 @@ Widget emptyStudy(BuildContext context) => Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.travel_explore, size: 56, color: Colors.white38),
+          Icon(Icons.travel_explore, size: 56, color: kFaint),
           const SizedBox(height: 12),
           const Text('لا توجد روابط بعد. افتح المودل واضغط أيقونة الروابط 🔗 ثم «ابدأ استخراج الروابط».',
-              textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, height: 1.6)),
+              textAlign: TextAlign.center, style: TextStyle(color: kSoft, height: 1.6)),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MoodlePage())),
@@ -109,7 +105,7 @@ Widget videoTile(BuildContext c, MoodleLink l) => ListTile(
       leading: Checkbox(value: study.isDone(l), onChanged: (_) => study.toggleDone(l)),
       title: Text(l.title, maxLines: 2, overflow: TextOverflow.ellipsis),
       subtitle: Text('${study.courses[l.cid] ?? ''} · ${(study.secondsOf(l) / 60).ceil()} د',
-          maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54)),
+          maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: kMuted)),
       trailing: IconButton(icon: const Icon(Icons.edit_note), tooltip: 'الدفتر', onPressed: () => openNotebook(c, l)),
       onTap: () => playLink(c, l),
     );
@@ -122,7 +118,7 @@ Widget agendaTile(AgendaItem a) {
     leading: Icon(icon, color: a.done ? Colors.greenAccent : late ? Colors.redAccent : kAccent),
     title: Text(a.title, maxLines: 2, overflow: TextOverflow.ellipsis),
     subtitle: Text('${dayLabel(a.when)} ${clock(a.when)}${late ? ' · متأخر' : ''}${a.cid.isNotEmpty ? ' · ${study.courses[a.cid] ?? ''}' : ''}',
-        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: late ? Colors.redAccent : Colors.white54)),
+        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: late ? Colors.redAccent : kMuted)),
     trailing: Checkbox(
       value: a.done,
       onChanged: (_) {
@@ -162,7 +158,7 @@ class TodayTab extends StatelessWidget {
           const SizedBox(height: 8),
           LinearProgressIndicator(value: all == 0 ? 0 : study.doneAll / all, color: kAccent, minHeight: 8),
           const SizedBox(height: 8),
-          Text('${study.doneAll} من $all منجز · تتابع ${study.streak} يوم', style: const TextStyle(color: Colors.white60)),
+          Text('${study.doneAll} من $all منجز · تتابع ${study.streak} يوم', style: TextStyle(color: kMuted)),
         ]),
       ),
       const SizedBox(height: 10),
@@ -210,7 +206,7 @@ class TodayTab extends StatelessWidget {
         for (final a in late.reversed.take(5)) agendaTile(a),
       ],
       const Padding(padding: EdgeInsets.fromLTRB(4, 10, 4, 4), child: Text('القادم خلال 7 أيام', style: TextStyle(fontWeight: FontWeight.w800))),
-      if (soon.isEmpty) const Padding(padding: EdgeInsets.all(8), child: Text('لا مواعيد قريبة', style: TextStyle(color: Colors.white54))),
+      if (soon.isEmpty) Padding(padding: EdgeInsets.all(8), child: Text('لا مواعيد قريبة', style: TextStyle(color: kMuted))),
       for (final a in soon) agendaTile(a),
       const SizedBox(height: 10),
       OutlinedButton.icon(
@@ -264,7 +260,7 @@ class PlanTab extends StatelessWidget {
               left == 0 && res.needMin == 0
                   ? 'أنهيت كل المطلوب 🎉'
                   : '$left فيديو متبقٍ · المطلوب ${fmtMinutes(res.needMin)} · متاحك ${fmtMinutes(res.capacityMin)} (${fmtMinutes(study.dailyMinutes)} يومياً)',
-              style: const TextStyle(color: Colors.white70, height: 1.5)),
+              style: TextStyle(color: kSoft, height: 1.5)),
           if (res.shortMin > 0)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -274,12 +270,12 @@ class PlanTab extends StatelessWidget {
           if (study.fetching)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('جاري قراءة مدد الفيديوهات ${study.fetched}/${study.toFetch}...', style: const TextStyle(color: Colors.white54, fontSize: 12.5)),
+              child: Text('جاري قراءة مدد الفيديوهات ${study.fetched}/${study.toFetch}...', style: TextStyle(color: kMuted, fontSize: 12.5)),
             )
           else if (study.unknownDurations > 0)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('${study.unknownDurations} فيديو لم تُعرف مدته (حُسب كـ 15 دقيقة)', style: const TextStyle(color: Colors.white54, fontSize: 12.5)),
+              child: Text('${study.unknownDurations} فيديو لم تُعرف مدته (حُسب كـ 15 دقيقة)', style: TextStyle(color: kMuted, fontSize: 12.5)),
             ),
         ]),
       ),
@@ -295,7 +291,7 @@ class PlanTab extends StatelessWidget {
             subtitle: Text(
                 '${plan[i].items.length} فيديو${plan[i].tasks.isNotEmpty ? ' · ${plan[i].tasks.length} تسليم/اختبار' : ''} · ${fmtMinutes(plan[i].minutes)}'
                 '${plan[i].minutes > study.dailyMinutes ? ' · أكثر من ساعاتك' : ''}',
-                style: TextStyle(color: plan[i].minutes > study.dailyMinutes ? Colors.orangeAccent : Colors.white54)),
+                style: TextStyle(color: plan[i].minutes > study.dailyMinutes ? Colors.orangeAccent : kMuted)),
             children: [
               if (plan[i].items.isNotEmpty && dayOnly(plan[i].date) == dayOnly(DateTime.now()))
                 Padding(
@@ -334,7 +330,7 @@ class ProgressTab extends StatelessWidget {
           const SizedBox(height: 8),
           LinearProgressIndicator(value: all == 0 ? 0 : dn / all, color: kAccent, minHeight: 8),
           const SizedBox(height: 6),
-          Text('$dn من $all منجز (فيديوهات وملفات)', style: const TextStyle(color: Colors.white54)),
+          Text('$dn من $all منجز (فيديوهات وملفات)', style: TextStyle(color: kMuted)),
         ]),
       ),
       const SizedBox(height: 12),
@@ -357,7 +353,7 @@ class ProgressTab extends StatelessWidget {
             const SizedBox(height: 4),
             Text('${study.doneOf(id)}/${study.totalOf(id)} · ${(study.doneOf(id) * 100 / study.totalOf(id)).round()}%'
                 '${und != null ? ' · الفهم ${(und * 100).round()}%' : ''}',
-                style: const TextStyle(color: Colors.white54, fontSize: 12.5)),
+                style: TextStyle(color: kMuted, fontSize: 12.5)),
           ]),
         ),
         children: [
@@ -392,5 +388,40 @@ class ProgressTab extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+
+/// Two related screens in one tab, switched by a small segmented control at the top
+class _Pair extends StatefulWidget {
+  final List<String> labels;
+  final List<Widget> pages;
+  const _Pair({required this.labels, required this.pages});
+  @override
+  State<_Pair> createState() => _PairState();
+}
+
+class _PairState extends State<_Pair> with AutomaticKeepAliveClientMixin {
+  int i = 0;
+  @override
+  bool get wantKeepAlive => true;
+  @override
+  Widget build(BuildContext c) {
+    super.build(c);
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+        child: SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<int>(
+            showSelectedIcon: false,
+            segments: [for (var k = 0; k < widget.labels.length; k++) ButtonSegment(value: k, label: Text(widget.labels[k]))],
+            selected: {i},
+            onSelectionChanged: (v) => setState(() => i = v.first),
+          ),
+        ),
+      ),
+      Expanded(child: IndexedStack(index: i, children: widget.pages)),
+    ]);
   }
 }

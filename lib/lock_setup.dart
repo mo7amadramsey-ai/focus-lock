@@ -86,7 +86,7 @@ Widget _sheetGrip() => Center(
         width: 40,
         height: 4,
         margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
+        decoration: BoxDecoration(color: kLine, borderRadius: BorderRadius.circular(4)),
       ),
     );
 
@@ -108,7 +108,7 @@ Future<int?> confirmStrict(BuildContext c, Duration base,
             Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text('المدة ${fmtMinutes(base.inMinutes)}. يُحسب وقت القفل فقط أثناء التشغيل: إذا أوقفته أو أُغلقت الشاشة يتوقف العدّاد. الحد الأقصى للقفل ${fmtMinutes(max ~/ 60000)}، ولا يوجد مخرج طوارئ.',
-                style: const TextStyle(color: Colors.white60, height: 1.5)),
+                style: TextStyle(color: kMuted, height: 1.5)),
             const SizedBox(height: 16),
             const Text('وقت إضافي', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
@@ -175,7 +175,7 @@ Future<int?> pickExtension(BuildContext c, {required bool expired}) {
           expired
               ? 'لم يُغلق الفيديو. هل تريد تمديد فترة التركيز لتكمل المشاهدة؟'
               : 'أضف وقتاً إلى القفل الحالي (ضمن الحد الأقصى للقفل). التمديد فقط، ولا يمكن تقصير القفل.',
-          style: const TextStyle(color: Colors.white60, height: 1.5),
+          style: TextStyle(color: kMuted, height: 1.5),
         ),
         const SizedBox(height: 16),
         Wrap(spacing: 8, runSpacing: 8, children: [

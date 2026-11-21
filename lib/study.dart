@@ -229,6 +229,7 @@ class StudyStore extends ChangeNotifier {
   int dailyMinutes = 180;
   bool remindersOn = true;
   String moodleHost = 'moodle.ucas.edu.ps';
+  String themeMode = 'dark'; // dark | light | system
   bool loaded = false, fetching = false;
   int fetched = 0, toFetch = 0;
   String? notice; // shown when a damaged file was restored from the backup copy
@@ -302,6 +303,7 @@ class StudyStore extends ChangeNotifier {
     dailyMinutes = (j['daily'] as num?)?.toInt() ?? dailyMinutes;
     remindersOn = j['rem'] as bool? ?? remindersOn;
     moodleHost = '${j['host'] ?? moodleHost}';
+    themeMode = '${j['theme'] ?? themeMode}';
   }
 
   Map<String, dynamic> _state() => {
@@ -309,6 +311,7 @@ class StudyStore extends ChangeNotifier {
         'daily': dailyMinutes,
         'rem': remindersOn,
         'host': moodleHost,
+        'theme': themeMode,
         'done': done.toList(),
         'dur': dur,
         'notes': {for (final e in notes.entries) if (!e.value.isEmpty) e.key: e.value.toJson()},
@@ -356,10 +359,11 @@ class StudyStore extends ChangeNotifier {
     scheduleReminders();
   }
 
-  void setSettings({int? daily, bool? reminders, String? host}) {
+  void setSettings({int? daily, bool? reminders, String? host, String? theme}) {
     if (daily != null) dailyMinutes = daily;
     if (reminders != null) remindersOn = reminders;
     if (host != null && host.trim().isNotEmpty) moodleHost = host.trim().toLowerCase();
+    if (theme != null) themeMode = theme;
     saveSoon();
     notifyListeners();
     scheduleReminders();

@@ -260,7 +260,7 @@ class _DocViewerPageState extends State<DocViewerPage> {
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.description_outlined, size: 56, color: Colors.white38),
+            Icon(Icons.description_outlined, size: 56, color: kFaint),
             const SizedBox(height: 14),
             Text(
               ext == '.doc' || ext == '.xls' || ext == '.ppt'
@@ -349,7 +349,7 @@ class _DocViewerPageState extends State<DocViewerPage> {
               ]),
               const SizedBox(height: 10),
               if ((slides[i] as List).isEmpty)
-                const Text('(شريحة بلا نص)', style: TextStyle(color: Colors.white38))
+                Text('(شريحة بلا نص)', style: TextStyle(color: kFaint))
               else ...[
                 _txt((slides[i] as List).first, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, height: 1.5)),
                 for (final p in (slides[i] as List).skip(1))
@@ -400,7 +400,7 @@ class _DocViewerPageState extends State<DocViewerPage> {
                           width: 46,
                           alignment: Alignment.center,
                           decoration: const BoxDecoration(color: kSurface2, border: Border(bottom: BorderSide(color: kOutline), right: BorderSide(color: kOutline))),
-                          child: Text('${i + 1}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                          child: Text('${i + 1}', style: TextStyle(fontSize: 12, color: kMuted)),
                         ),
                         for (final v in rows[i])
                           Container(
@@ -513,7 +513,7 @@ class _DocsPageState extends State<DocsPage> {
         'excel' => (Icons.table_chart, const Color(0xFF4CAF50)),
         'ppt' => (Icons.slideshow, const Color(0xFFFF9800)),
         'img' => (Icons.image, const Color(0xFFAB47BC)),
-        _ => (Icons.insert_drive_file, Colors.white54),
+        _ => (Icons.insert_drive_file, kMuted),
       };
 
   Future<void> _openDrive() async {
@@ -599,14 +599,14 @@ class _DocsPageState extends State<DocsPage> {
                   child: Padding(
                     padding: const EdgeInsets.all(28),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.folder_open, size: 64, color: Colors.white24),
+                      Icon(Icons.folder_open, size: 64, color: kLine),
                       const SizedBox(height: 14),
                       const Text('لا توجد مستندات بعد', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 8),
                       const Text(
                         'استورد ملفاً من هاتفك، أو افتح Google Drive واختر "فتح باستخدام Focus Lock"، أو افتح رابط مستند داخل المودل.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white60, height: 1.6),
+                        style: TextStyle(color: kMuted, height: 1.6),
                       ),
                       const SizedBox(height: 18),
                       OutlinedButton.icon(onPressed: _openDrive, icon: const Icon(Icons.add_to_drive), label: const Text('فتح Google Drive')),
@@ -648,9 +648,9 @@ class _DocsPageState extends State<DocsPage> {
                                 child: Icon(_look(extOf(f.path)).$1, color: _look(extOf(f.path)).$2),
                               ),
                               title: Text(baseName(f.path), maxLines: 2, overflow: TextOverflow.ellipsis),
-                              subtitle: Text('${extOf(f.path).replaceAll('.', '').toUpperCase()}  •  ${_size(f)}', style: const TextStyle(color: Colors.white54)),
+                              subtitle: Text('${extOf(f.path).replaceAll('.', '').toUpperCase()}  •  ${_size(f)}', style: TextStyle(color: kMuted)),
                               onTap: () => Navigator.push(c, MaterialPageRoute(builder: (_) => DocViewerPage(path: f.path))),
-                              trailing: IconButton(icon: const Icon(Icons.delete_outline), color: Colors.white54, onPressed: () => _delete(f)),
+                              trailing: IconButton(icon: Icon(Icons.delete_outline), color: kMuted, onPressed: () => _delete(f)),
                             ),
                           ),
                         if (shown.isEmpty) const Padding(padding: EdgeInsets.all(40), child: Center(child: Text('لا نتائج'))),

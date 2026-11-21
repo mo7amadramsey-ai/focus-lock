@@ -82,7 +82,24 @@ class _StudySettingsPageState extends State<StudySettingsPage> {
               value: study.dailyMinutes.clamp(30, 600).toDouble(),
               onChanged: (v) => study.setSettings(daily: v.round()),
             ),
-            Text('${fmtMinutes(study.dailyMinutes)} يومياً. تعتمد عليها الخطة لتحذّرك عند العجز.', style: const TextStyle(color: Colors.white54)),
+            Text('${fmtMinutes(study.dailyMinutes)} يومياً. تعتمد عليها الخطة لتحذّرك عند العجز.', style: TextStyle(color: kMuted)),
+            const Divider(height: 28),
+            const Text('المظهر', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'light', label: Text('نهار'), icon: Icon(Icons.light_mode_outlined)),
+                ButtonSegment(value: 'dark', label: Text('ليل'), icon: Icon(Icons.dark_mode_outlined)),
+                ButtonSegment(value: 'system', label: Text('تلقائي'), icon: Icon(Icons.brightness_auto_outlined)),
+              ],
+              selected: {study.themeMode},
+              onSelectionChanged: (v) {
+                study.setSettings(theme: v.first);
+                applyThemeMode(v.first);
+                setState(() {});
+                repaintAll();
+              },
+            ),
             const Divider(height: 28),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -110,13 +127,13 @@ class _StudySettingsPageState extends State<StudySettingsPage> {
                 child: const Text('حفظ العنوان'),
               ),
               const SizedBox(width: 10),
-              const Expanded(child: Text('المتصفح يقتصر على هذا النطاق فقط.', style: TextStyle(color: Colors.white54, fontSize: 12.5))),
+              Expanded(child: Text('المتصفح يقتصر على هذا النطاق فقط.', style: TextStyle(color: kMuted, fontSize: 12.5))),
             ]),
             const Divider(height: 28),
             const Text('تسجيل الدخول إلى المودل', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text(hasLogin ? 'يوجد دخول محفوظ على هذا الهاتف.' : 'اختياري. إن لم تحفظ شيئاً فستكتب بياناتك في صفحة المودل كل مرة.',
-                style: const TextStyle(color: Colors.white54, height: 1.5)),
+                style: TextStyle(color: kMuted, height: 1.5)),
             const SizedBox(height: 6),
             TextField(controller: user, decoration: const InputDecoration(hintText: 'اسم المستخدم')),
             const SizedBox(height: 6),
@@ -147,7 +164,7 @@ class _StudySettingsPageState extends State<StudySettingsPage> {
             const Divider(height: 28),
             const Text('البيانات والخصوصية', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text('كل شيء محفوظ على هاتفك فقط. لا خادم ولا حساب. الحفظ على مرحلتين (ملف مؤقت ثم استبدال) مع نسخة سابقة تُستعاد إن تلف الملف.', style: TextStyle(color: Colors.white54, height: 1.5)),
+            Text('كل شيء محفوظ على هاتفك فقط. لا خادم ولا حساب. الحفظ على مرحلتين (ملف مؤقت ثم استبدال) مع نسخة سابقة تُستعاد إن تلف الملف.', style: TextStyle(color: kMuted, height: 1.5)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
               FilledButton.tonalIcon(
