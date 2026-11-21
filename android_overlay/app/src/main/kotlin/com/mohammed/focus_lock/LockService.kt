@@ -9,6 +9,8 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Region
 import android.graphics.RegionIterator
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -22,6 +24,7 @@ import android.widget.TextView
 // settings, other apps, notification shade, power menu) pulls the app back to the front.
 // It checks the saved time-left itself, so it always stops when the timer ends
 // (the timer only counts down while the video is playing).
+// A phone call (ringing or in progress) is never blocked, whatever dialer the phone uses.
 class LockService : AccessibilityService() {
 
     // Only calling is allowed: dialer (keypad), contacts, and the in-call screen
@@ -77,8 +80,23 @@ class LockService : AccessibilityService() {
 
     private fun okPkg(p: String?) = p != null && (p == packageName || p in allowed)
 
+    // A call is ringing or in progress. The in-call screen and the incoming-call pop-up belong to the phone maker's
+    // own packages (they differ from phone to phone), so while a call exists nothing is covered and nothing is pulled back.
+    // TelecomManager needs the phone permission; if it is not granted the audio mode tells the same thing.
+    private fun inCall(): Boolean {
+        try {
+            if (Build.VERSION.SDK_INT >= 23 && getSystemService(TelecomManager::class.java).isInCall) return true
+        } catch (e: Exception) {}
+        try {
+            val m = (getSystemService(AUDIO_SERVICE) as AudioManager).mode
+            if (m == AudioManager.MODE_IN_CALL || m == AudioManager.MODE_RINGTONE) return true
+        } catch (e: Exception) {}
+        return false
+    }
+
     private fun refresh() {
         if (!active()) { drawPanels(emptyList()); return }
+        if (inCall()) { drawPanels(emptyList()); return }
         val list = windows.sortedByDescending { it.layer } // top-most window first
         val allowedAbove = Region()
         val rects = mutableListOf<Rect>()
@@ -145,6 +163,7 @@ class LockService : AccessibilityService() {
     override fun onAccessibilityEvent(e: AccessibilityEvent?) {
         val prefs = getSharedPreferences("strict", MODE_PRIVATE)
         if (prefs.getLong("left", 0L) <= 0L) return // no active session (time left = 0)
+        if (inCall()) return // never interfere with a phone call
         val pkg = e?.packageName?.toString() ?: return
         if (pkg == packageName || pkg in allowed) return
         // Quick settings / notification shade: close it first (Android 12+)
