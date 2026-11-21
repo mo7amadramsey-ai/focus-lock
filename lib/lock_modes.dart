@@ -5,6 +5,7 @@ import 'browser_page.dart';
 import 'channel.dart';
 import 'library_page.dart';
 import 'links_page.dart';
+import 'lock_ctl.dart';
 import 'lock_setup.dart';
 import 'moodle_page.dart';
 import 'nav.dart';
