@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'docs.dart';
+import 'link_open.dart';
 import 'notebook_page.dart';
 import 'preview_page.dart';
 import 'storage.dart';
@@ -363,27 +363,8 @@ class _LinksPageState extends State<LinksPage> {
     await c.start();
   }
 
-  void _open(MoodleLink l) {
-    switch (l.group) {
-      case 'yt':
-        Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => PreviewPage(url: l.url, title: l.title, youtubeId: VideoId.parseVideoId(l.url))));
-        break;
-      case 'pdf':
-      case 'doc':
-        toast('جاري فتح المستند...');
-        widget.onOpenDoc(l.url);
-        break;
-      case 'file':
-        Clipboard.setData(ClipboardData(text: l.url));
-        toast('هذا النوع لا يُعرض داخل التطبيق — نُسخ الرابط');
-        break;
-      default:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => PreviewPage(url: l.url, title: l.title)));
-    }
-  }
+  void _open(MoodleLink l) =>
+      openLinkInApp(context, url: l.url, title: l.title, group: l.group, onOpenDoc: widget.onOpenDoc);
 
   IconData _icon(String g) => groupIcon(g);
 
@@ -496,10 +477,8 @@ class _LinksPageState extends State<LinksPage> {
                                         ])
                                       : null,
                                   onTap: () => _open(l),
-                                  onLongPress: () {
-                                    Clipboard.setData(ClipboardData(text: l.url));
-                                    toast('تم نسخ الرابط');
-                                  },
+                                  onLongPress: () => showLinkActions(context,
+                                      url: l.url, title: l.title, group: l.group, onOpenDoc: widget.onOpenDoc),
                                 ),
                             ],
                           ),

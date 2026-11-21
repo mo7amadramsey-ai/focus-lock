@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'channel.dart';
 import 'storage.dart';
 import 'theme.dart';
 
@@ -16,11 +17,13 @@ class DlTask {
   String title;
   final String? customName; // name chosen by the user (null = YouTube title)
   final int? number; // 001, 002... (null = no number)
+  final String? quality; // YouTube quality label ("720p"), "audio" for sound only, null = best
+  final bool direct; // a plain file (Moodle / any link) instead of a YouTube video
   DlState state = DlState.preparing;
   int got = 0, total = 0;
   String? error;
   bool cancelRequested = false;
-  DlTask(this.id, this.url, this.dir, this.title, {this.customName, this.number});
+  DlTask(this.id, this.url, this.dir, this.title, {this.customName, this.number, this.quality, this.direct = false});
 
   bool get active => state == DlState.preparing || state == DlState.running;
   double? get progress => total > 0 ? (got / total).clamp(0.0, 1.0).toDouble() : null;
@@ -39,11 +42,12 @@ class DownloadManager extends ChangeNotifier {
   List<int> pendingNumbers(Directory dir) =>
       [for (final t in tasks) if (t.active && t.dir.path == dir.path && t.number != null) t.number!];
 
-  bool start(String url, Directory dir, {String? name, int? number}) {
+  bool start(String url, Directory dir, {String? name, int? number, String? quality}) {
     final vid = VideoId.parseVideoId(url);
-    final dup = tasks.any((t) => t.active && t.dir.path == dir.path && VideoId.parseVideoId(t.url) == vid);
+    final dup = tasks.any((t) =>
+        t.active && !t.direct && t.dir.path == dir.path && VideoId.parseVideoId(t.url) == vid && t.quality == quality);
     if (dup) return false;
-    final t = DlTask(_next++, url, dir, name ?? 'جاري التحضير...', customName: name, number: number);
+    final t = DlTask(_next++, url, dir, name ?? 'جاري التحضير...', customName: name, number: number, quality: quality);
     tasks.insert(0, t); // newest on top
     notifyListeners();
     _run(t);
@@ -57,7 +61,22 @@ class DownloadManager extends ChangeNotifier {
 
   void retry(DlTask t) {
     tasks.remove(t);
-    start(t.url, t.dir, name: t.customName, number: t.number);
+    if (t.direct) {
+      startFile(t.url, t.dir, name: t.customName ?? t.title, number: t.number);
+    } else {
+      start(t.url, t.dir, name: t.customName, number: t.number, quality: t.quality);
+    }
+  }
+
+  /// A plain file (a Moodle resource or any link). Uses the Moodle login session when the host is Moodle.
+  bool startFile(String url, Directory dir, {required String name, int? number}) {
+    final dup = tasks.any((t) => t.active && t.direct && t.url == url && t.dir.path == dir.path);
+    if (dup) return false;
+    final t = DlTask(_next++, url, dir, name, customName: name, number: number, direct: true);
+    tasks.insert(0, t);
+    notifyListeners();
+    _runFile(t);
+    return true;
   }
 
   void remove(DlTask t) {
@@ -71,7 +90,82 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _runFile(DlTask t) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
+    IOSink? sink;
+    File? part;
+    try {
+      var u = Uri.parse(t.url);
+      HttpClientResponse? res;
+      for (var hop = 0; hop < 6; hop++) {
+        final req = await client.getUrl(u);
+        req.followRedirects = false;
+        req.headers.set('User-Agent', 'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36');
+        if (u.host.endsWith('ucas.edu.ps')) {
+          final ck = await cookiesFor(u.toString());
+          if (ck.isNotEmpty) req.headers.set('Cookie', ck);
+        }
+        res = await req.close();
+        if (res.isRedirect) {
+          final loc = res.headers.value('location');
+          await res.drain<void>();
+          if (loc == null) throw Exception('توجيه بلا عنوان');
+          u = u.resolve(loc);
+          continue;
+        }
+        break;
+      }
+      if (res == null || res.statusCode != 200) throw Exception('HTTP ${res?.statusCode}');
+      if ((res.headers.contentType?.mimeType ?? '') == 'text/html') {
+        throw Exception('الرابط يفتح صفحة وليس ملفاً (افتح المودل وسجّل الدخول ثم أعد المحاولة)');
+      }
+      if (t.cancelRequested) throw _Cancelled();
+      var ext = extOfName(Uri.decodeComponent(u.path));
+      final cd = res.headers.value('content-disposition') ?? '';
+      final fn = RegExp(r'filename\*?=(?:UTF-8\x27\x27)?"?([^";]+)"?', caseSensitive: false).firstMatch(cd)?.group(1);
+      if (fn != null && extOfName(Uri.decodeComponent(fn)).isNotEmpty) ext = extOfName(Uri.decodeComponent(fn));
+      if (ext.isEmpty) ext = (res.headers.contentType?.mimeType ?? '') == 'application/pdf' ? '.pdf' : '';
+      t.total = res.contentLength > 0 ? res.contentLength : 0;
+      t.state = DlState.running;
+      notifyListeners();
+      final safe = safeName(t.customName ?? t.title);
+      part = File('${t.dir.path}/$safe.${t.id}.part');
+      sink = part.openWrite();
+      final clock = Stopwatch()..start();
+      await for (final chunk in res) {
+        if (t.cancelRequested) throw _Cancelled();
+        sink.add(chunk);
+        t.got += chunk.length;
+        if (clock.elapsedMilliseconds > 250) {
+          clock.reset();
+          notifyListeners();
+        }
+      }
+      await sink.flush();
+      await sink.close();
+      sink = null;
+      if (t.number != null) await insertAtNumber(t.dir, t.number!);
+      var target = File('${t.dir.path}/${numberedName(t.number, safe, ext)}');
+      for (var n = 2; target.existsSync(); n++) {
+        target = File('${t.dir.path}/${numberedName(t.number, '$safe ($n)', ext)}');
+      }
+      await part.rename(target.path);
+      t.state = DlState.done;
+    } on _Cancelled {
+      t.state = DlState.cancelled;
+      await _cleanup(sink, part);
+    } catch (e) {
+      t.state = DlState.failed;
+      t.error = e.toString().replaceFirst('Exception: ', '');
+      await _cleanup(sink, part);
+    } finally {
+      client.close(force: true);
+      notifyListeners();
+    }
+  }
+
   Future<void> _run(DlTask t) async {
+    if (t.direct) return _runFile(t);
     final yt = YoutubeExplode();
     IOSink? sink;
     File? part;
@@ -82,7 +176,19 @@ class DownloadManager extends ChangeNotifier {
       notifyListeners();
       if (t.cancelRequested) throw _Cancelled();
       final manifest = await yt.videos.streamsClient.getManifest(id);
-      final info = manifest.muxed.withHighestBitrate(); // video + audio in one file
+      StreamInfo info;
+      var ext = '.mp4';
+      if (t.quality == 'audio' && manifest.audioOnly.isNotEmpty) {
+        info = manifest.audioOnly.withHighestBitrate();
+        ext = info.container.name == 'mp4' ? '.m4a' : '.${info.container.name}';
+      } else {
+        final cands = t.quality == null
+            ? <MuxedStreamInfo>[]
+            : manifest.muxed.where((s) => s.videoQualityLabel == t.quality).toList();
+        info = cands.isEmpty
+            ? manifest.muxed.withHighestBitrate() // video + audio in one file
+            : cands.reduce((a, b) => a.bitrate.bitsPerSecond >= b.bitrate.bitsPerSecond ? a : b);
+      }
       t.total = info.size.totalBytes;
       t.state = DlState.running;
       notifyListeners();
@@ -107,9 +213,9 @@ class DownloadManager extends ChangeNotifier {
       sink = null;
       // Finished: make room for the chosen number (shift old videos by one), then give the final name
       if (t.number != null) await insertAtNumber(t.dir, t.number!);
-      var target = File('${t.dir.path}/${numberedName(t.number, safe, '.mp4')}');
+      var target = File('${t.dir.path}/${numberedName(t.number, safe, ext)}');
       for (var n = 2; target.existsSync(); n++) {
-        target = File('${t.dir.path}/${numberedName(t.number, '$safe ($n)', '.mp4')}');
+        target = File('${t.dir.path}/${numberedName(t.number, '$safe ($n)', ext)}');
       }
       await part.rename(target.path);
       t.state = DlState.done;

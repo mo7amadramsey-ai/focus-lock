@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'browser_page.dart';
 import 'downloads.dart';
+import 'link_open.dart' show YtOption, youtubeOptions;
 import 'storage.dart';
 import 'theme.dart';
 
@@ -54,6 +55,33 @@ void openOnYoutube(BuildContext c, String id) =>
 
 /// Same flow as the download button of the YouTube browser: folder -> name/number -> downloads list.
 Future<void> downloadYoutubeVideo(BuildContext context, String id, {String? title}) async {
+  // Quality first (video qualities that include sound, or sound only)
+  String? quality;
+  try {
+    final opts = await youtubeOptions(id);
+    if (!context.mounted) return;
+    if (opts.isNotEmpty) {
+      final pick = await showModalBottomSheet<YtOption>(
+        context: context,
+        backgroundColor: kSurface,
+        builder: (sheet) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(padding: EdgeInsets.all(16), child: Text('اختر الجودة', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
+            for (final o in opts)
+              ListTile(
+                leading: Icon(o.audio ? Icons.audiotrack_outlined : Icons.videocam_outlined),
+                title: Text(o.text),
+                subtitle: Text('${(o.bytes / 1048576).toStringAsFixed(1)} MB'),
+                onTap: () => Navigator.pop(sheet, o),
+              ),
+          ]),
+        ),
+      );
+      if (pick == null) return;
+      quality = pick.audio ? 'audio' : pick.label;
+    }
+  } catch (_) {}
+  if (!context.mounted) return;
   final dir = await chooseFolder(context);
   if (dir == null || !context.mounted) return;
   final r = await askNameNumber(context,
@@ -62,7 +90,7 @@ Future<void> downloadYoutubeVideo(BuildContext context, String id, {String? titl
       initialNumber: nextNumber(dir, pending: dl.pendingNumbers(dir)));
   if (r == null || !context.mounted) return;
   final started = dl.start('https://www.youtube.com/watch?v=$id', dir,
-      name: r.name.isEmpty ? null : r.name, number: r.number);
+      name: r.name.isEmpty ? null : r.name, number: r.number, quality: quality);
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(started ? 'أُضيف إلى التحميلات' : 'هذا الفيديو يُحمَّل إلى هذا المجلد بالفعل'),
     action: SnackBarAction(

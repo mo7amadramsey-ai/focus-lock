@@ -10,6 +10,7 @@ import android.telecom.TelecomManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import android.webkit.CookieManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -44,6 +45,9 @@ class MainActivity : FlutterFragmentActivity() {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 // args: left (ms of watching still required, max 3 hours), type ("web"/"local"/"moodle"/"playlist"/"app"), target (url or file path)
+                "getCookies" -> {
+                    result.success(CookieManager.getInstance().getCookie(call.argument<String>("url") ?: "") ?: "")
+                }
                 "startLock" -> {
                     prefs.edit()
                         .putLong("left", (call.argument<Number>("left"))!!.toLong().coerceIn(1L, 10800000L))
