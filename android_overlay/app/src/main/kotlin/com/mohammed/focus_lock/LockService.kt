@@ -2,6 +2,7 @@ package com.mohammed.focus_lock
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.telecom.TelecomManager
 import android.graphics.Color
@@ -22,6 +23,10 @@ import android.widget.TextView
 // settings, other apps, notification shade, power menu) pulls the app back to the front.
 // It checks the saved time-left itself, so it always stops when the timer ends
 // (the timer only counts down while the video is playing).
+//
+// Phone calls: while a normal (cellular) call is ringing or in progress the lock is fully
+// suspended, so the incoming-call heads-up, the answer/decline buttons and the in-call screen
+// of ANY phone brand work. The lock resumes by itself the moment the call ends.
 class LockService : AccessibilityService() {
 
     // Only calling is allowed: dialer (keypad), contacts, and the in-call screen
@@ -73,7 +78,14 @@ class LockService : AccessibilityService() {
         return super.onUnbind(intent)
     }
 
-    private fun active() = getSharedPreferences("strict", MODE_PRIVATE).getLong("left", 0L) > 0L
+    // True while a cellular call is ringing or in progress. Needs no permission.
+    // (MODE_IN_COMMUNICATION is deliberately NOT included: VoIP apps must not be a way out of the lock.)
+    private fun inCall(): Boolean = try {
+        val m = getSystemService(AUDIO_SERVICE) as AudioManager
+        m.mode == AudioManager.MODE_RINGTONE || m.mode == AudioManager.MODE_IN_CALL
+    } catch (e: Exception) { false }
+
+    private fun active() = getSharedPreferences("strict", MODE_PRIVATE).getLong("left", 0L) > 0L && !inCall()
 
     private fun okPkg(p: String?) = p != null && (p == packageName || p in allowed)
 
@@ -143,8 +155,7 @@ class LockService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent?) {
-        val prefs = getSharedPreferences("strict", MODE_PRIVATE)
-        if (prefs.getLong("left", 0L) <= 0L) return // no active session (time left = 0)
+        if (!active()) return // no active session (time left = 0) or a phone call is in progress
         val pkg = e?.packageName?.toString() ?: return
         if (pkg == packageName || pkg in allowed) return
         // Quick settings / notification shade: close it first (Android 12+)
