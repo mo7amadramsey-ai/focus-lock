@@ -1,0 +1,6 @@
+102:lib/lock_modes.dart:39:9: Error: Undefined name 'lock'.
+105:lib/lock_modes.dart:47:7: Error: Undefined name 'lock'.
+108:lib/lock_modes.dart:87:9: Error: Undefined name 'lock'.
+111:lib/storage.dart:356:49: Error: Undefined name 'kMuted'.
+117:FAILURE: Build failed with an exception.
+119:* What went wrong:

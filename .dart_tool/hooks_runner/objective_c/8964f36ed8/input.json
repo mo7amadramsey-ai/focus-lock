@@ -1,0 +1,29 @@
+{
+  "assets": {},
+  "config": {
+    "build_asset_types": [
+      "code_assets/code"
+    ],
+    "extensions": {
+      "code_assets": {
+        "android": {
+          "target_ndk_api": 24
+        },
+        "c_compiler": {
+          "ar": "/usr/local/lib/android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar",
+          "cc": "/usr/local/lib/android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin/clang",
+          "ld": "/usr/local/lib/android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin/ld.lld"
+        },
+        "link_mode_preference": "dynamic",
+        "target_architecture": "arm",
+        "target_os": "android"
+      }
+    },
+    "linking_enabled": true
+  },
+  "out_dir_shared": "/home/runner/work/focus-lock/focus-lock/.dart_tool/hooks_runner/shared/objective_c/build/",
+  "out_file": "/home/runner/work/focus-lock/focus-lock/.dart_tool/hooks_runner/objective_c/8964f36ed8/output.json",
+  "package_name": "objective_c",
+  "package_root": "/home/runner/.pub-cache/hosted/pub.dev/objective_c-9.5.0/",
+  "user_defines": {}
+}
