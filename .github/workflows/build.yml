@@ -103,8 +103,10 @@ jobs:
         with:
           name: focus-lock-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-      # Publish the APK as a GitHub Release (visible in the repo's "Releases" section)
+      # Publish the APK as a GitHub Release (visible in the repo's "Releases" section).
+      # Only from main: experimental branches must never become the "latest" release users install.
       - uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Focus Lock v1.0.${{ github.run_number }}
