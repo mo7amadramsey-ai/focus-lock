@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'calendar_tab.dart';
+import 'course_download.dart';
 import 'follow_tab.dart';
 import 'links_page.dart';
 import 'lock_modes.dart';
