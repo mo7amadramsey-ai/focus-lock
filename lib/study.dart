@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'channel.dart';
@@ -753,6 +754,7 @@ class StudyStore extends ChangeNotifier {
     daySecs.clear();
     daySessions.clear();
     examLog.clear();
+    await clearLogin();
     deadline = DateTime(2026, 12, 2);
     dailyMinutes = 180;
     scheduleReminders();
@@ -761,6 +763,30 @@ class StudyStore extends ChangeNotifier {
 }
 
 final study = StudyStore();
+
+// Optional saved Moodle login: kept only if the student chooses to, encrypted by the Android keystore
+const _sec = FlutterSecureStorage();
+
+Future<List<String>?> savedLogin() async {
+  try {
+    final u = await _sec.read(key: 'moodle_user'), p = await _sec.read(key: 'moodle_pass');
+    return u == null || p == null ? null : [u, p];
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> saveLogin(String u, String p) async {
+  await _sec.write(key: 'moodle_user', value: u);
+  await _sec.write(key: 'moodle_pass', value: p);
+}
+
+Future<void> clearLogin() async {
+  try {
+    await _sec.delete(key: 'moodle_user');
+    await _sec.delete(key: 'moodle_pass');
+  } catch (_) {}
+}
 
 /// Moodle address (the student can change it in the settings)
 String get moodleHome => 'https://${study.moodleHost}/';

@@ -157,10 +157,22 @@ class _MoodlePageState extends State<MoodlePage> {
           return NavigationDecision.navigate;
         },
         onUrlChange: (c) => url = c.url ?? url,
-        onPageFinished: (_) => bypass.clear(),
+        onPageFinished: (_) {
+          bypass.clear();
+          _fillLogin();
+        },
       ))
       ..loadRequest(Uri.parse(moodleHome));
     crawler = LinkCrawler(w);
+  }
+
+  // Fills (never submits) the Moodle login form with the login the student chose to save
+  Future<void> _fillLogin() async {
+    final cred = await savedLogin();
+    if (cred == null) return;
+    w.runJavaScript('(function(){var u=document.querySelector("#username"),p=document.querySelector("#password");'
+        'if(!u||!p||p.value)return;function s(e,v){e.value=v;e.dispatchEvent(new Event("input",{bubbles:true}));}'
+        's(u,${jsonEncode(cred[0])});s(p,${jsonEncode(cred[1])});})();');
   }
 
   @override

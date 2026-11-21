@@ -13,6 +13,16 @@ class StudySettingsPage extends StatefulWidget {
 
 class _StudySettingsPageState extends State<StudySettingsPage> {
   late final host = TextEditingController(text: study.moodleHost);
+  final user = TextEditingController(), pass = TextEditingController();
+  bool hasLogin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    savedLogin().then((v) {
+      if (mounted) setState(() => hasLogin = v != null);
+    });
+  }
 
   void _toast(String t) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
@@ -101,6 +111,38 @@ class _StudySettingsPageState extends State<StudySettingsPage> {
               ),
               const SizedBox(width: 10),
               const Expanded(child: Text('المتصفح يقتصر على هذا النطاق فقط.', style: TextStyle(color: Colors.white54, fontSize: 12.5))),
+            ]),
+            const Divider(height: 28),
+            const Text('تسجيل الدخول إلى المودل', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(hasLogin ? 'يوجد دخول محفوظ على هذا الهاتف.' : 'اختياري. إن لم تحفظ شيئاً فستكتب بياناتك في صفحة المودل كل مرة.',
+                style: const TextStyle(color: Colors.white54, height: 1.5)),
+            const SizedBox(height: 6),
+            TextField(controller: user, decoration: const InputDecoration(hintText: 'اسم المستخدم')),
+            const SizedBox(height: 6),
+            TextField(controller: pass, obscureText: true, decoration: const InputDecoration(hintText: 'كلمة المرور')),
+            const SizedBox(height: 6),
+            Row(children: [
+              FilledButton.tonal(
+                onPressed: () async {
+                  if (user.text.trim().isEmpty || pass.text.isEmpty) return;
+                  await saveLogin(user.text.trim(), pass.text);
+                  user.clear();
+                  pass.clear();
+                  setState(() => hasLogin = true);
+                  _toast('حُفظ الدخول مشفراً. سيُملأ تلقائياً دون تسجيل الدخول عنك');
+                },
+                child: const Text('حفظ'),
+              ),
+              const SizedBox(width: 8),
+              if (hasLogin)
+                OutlinedButton(
+                  onPressed: () async {
+                    await clearLogin();
+                    setState(() => hasLogin = false);
+                  },
+                  child: const Text('حذف المحفوظ'),
+                ),
             ]),
             const Divider(height: 28),
             const Text('البيانات والخصوصية', style: TextStyle(fontWeight: FontWeight.w800)),
