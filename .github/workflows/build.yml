@@ -113,3 +113,13 @@ jobs:
           body_path: release_notes.md
           files: build/app/outputs/flutter-apk/app-release.apk
           make_latest: true
+      # Preview builds of the merge branch: a fixed pre-release tag (overwritten each time, never "latest")
+      - uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/feature/murshid-merge'
+        with:
+          tag_name: preview-murshid-merge
+          name: Preview - murshid merge (not stable)
+          body_path: release_notes.md
+          files: build/app/outputs/flutter-apk/app-release.apk
+          prerelease: true
+          make_latest: false
