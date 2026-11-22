@@ -545,10 +545,12 @@ class StudyStore extends ChangeNotifier {
   int effortMin(AgendaItem a) => switch (a.kind) { 'exam' => 90, 'quiz' => 40, _ => 60 };
 
   // ---------------- Moodle sync results ----------------
-  void recordCrawl(List<MoodleLink> fresh, List<MoodleTask> newTasks, {required bool first}) {
+  void recordCrawl(List<MoodleLink> freshAll, List<MoodleTask> newTasks, {required bool first}) {
+    var fresh = freshAll;
     final now = DateTime.now();
     if (!first) {
       for (final l in fresh) {
+        if (l.kind == 'txt') continue; // texts are not news
         feed.insert(0, FeedItem(now, l.cid, l.group, l.title, l.url));
       }
     }
@@ -558,6 +560,7 @@ class StudyStore extends ChangeNotifier {
     saveSoon();
     notifyListeners();
     scheduleReminders();
+    fresh = fresh.where((l) => l.kind != 'txt').toList();
     if (!first && fresh.isNotEmpty && remindersOn) {
       ch.invokeMethod('notifyNow', {
         'title': 'جديد في المودل',

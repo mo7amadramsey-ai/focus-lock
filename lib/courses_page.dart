@@ -148,6 +148,17 @@ class CourseDetailPage extends StatelessWidget {
   }
 
   Widget _item(BuildContext c, MoodleLink l) {
+    if (l.group == 'txt') {
+      // text the teacher wrote on the course page
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.notes, size: 18, color: kMuted),
+          const SizedBox(width: 10),
+          Expanded(child: SelectableText(l.title, style: TextStyle(color: kSoft, height: 1.6))),
+        ]),
+      );
+    }
     final isC = countable(l);
     final id = ytId(l);
     return ListTile(

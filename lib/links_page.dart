@@ -118,6 +118,14 @@ const crawlJs = r'''
         }
         P({t: "task", cid: it.cid, k: tm[1], title: it.title || pt, url: it.u, due: di >= 0 ? tx.substr(di, 140) : "", sub: sub});
       }
+      // free text of the course page (section summaries and labels): shown in the app like on Moodle
+      if (/\/course\/view\.php/.test(it.u)) {
+        root.querySelectorAll("li.section .summarytext, li.section .course-section-summary, .activity.modtype_label .contentwithoutlink, .activity.modtype_label .no-overflow").forEach(function(e) {
+          var tt = clean(e);
+          if (tt.length < 8) return;
+          emit(it.cid, "txt", tt.slice(0, 700), "txt:" + it.cid + ":" + tt.slice(0, 60), "", secOf(e, it.sec));
+        });
+      }
       root.querySelectorAll("a[href],iframe[src],iframe[data-src],video[src],video source[src],object[data],embed[src]").forEach(function(e) {
         var raw = e.getAttribute("href") || e.getAttribute("src") || e.getAttribute("data-src") || e.getAttribute("data");
         if (!raw || /^(javascript|mailto|tel|blob|data):|^#/.test(raw)) return;
@@ -171,7 +179,7 @@ class MoodleLink {
 
   // yt / pdf / doc / video / file / ext
   String get group {
-    if (kind == 'yt' || kind == 'ext' || kind == 'act') return kind;
+    if (kind == 'yt' || kind == 'ext' || kind == 'act' || kind == 'txt') return kind;
     final p = (Uri.tryParse(url)?.path ?? url).toLowerCase();
     if (kind == 'video' || isVideo(p) || ct.startsWith('video/')) return 'video';
     if (p.endsWith('.pdf') || ct.contains('pdf')) return 'pdf';
@@ -322,6 +330,7 @@ IconData groupIcon(String g) => switch (g) {
       'video' => Icons.play_circle_outline,
       'file' => Icons.insert_drive_file_outlined,
       'act' => Icons.article_outlined,
+      'txt' => Icons.notes,
       _ => Icons.link,
     };
 
@@ -369,8 +378,14 @@ class _LinksPageState extends State<LinksPage> {
     await c.start();
   }
 
-  void _open(MoodleLink l) =>
-      openLinkInApp(context, url: l.url, title: l.title, group: l.group, onOpenDoc: widget.onOpenDoc);
+  void _open(MoodleLink l) {
+    if (l.group == 'txt') {
+      Clipboard.setData(ClipboardData(text: l.title)); // a teacher's text, not a link
+      toast('نُسخ النص');
+      return;
+    }
+    openLinkInApp(context, url: l.url, title: l.title, group: l.group, onOpenDoc: widget.onOpenDoc);
+  }
 
   IconData _icon(String g) => groupIcon(g);
 
