@@ -41,9 +41,17 @@ jobs:
             echo "::error::Secrets FL_KEYSTORE_B64 / FL_KEYSTORE_PASS are missing or empty. Refusing to publish an APK signed with a different key."
             exit 1
           fi
-      - name: Build APK
-        run: flutter build apk --release --build-number=${{ github.run_number }} 2>&1 | tee build.log
+      # Two files with the SAME versionCode: the universal APK (all phones, ~65 MB) and a SMALL arm64 APK (~30 MB, almost every
+      # phone made after 2017). A smaller file downloads and installs much more reliably on a weak connection.
+      - name: Build APKs
         shell: bash
+        run: |
+          set -o pipefail
+          flutter build apk --release --build-number=${{ github.run_number }} 2>&1 | tee build.log
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/app-release.apk
+          flutter build apk --release --target-platform android-arm64 --build-number=${{ github.run_number }} 2>&1 | tee -a build.log
+          cp build/app/outputs/flutter-apk/app-release.apk dist/app-arm64-release.apk
       # Re-sign with the PERMANENT key (stored in repo secrets) so every build can update the previous one.
       - name: Sign APK with the permanent key
         env:
@@ -54,9 +62,10 @@ jobs:
           set -euo pipefail
           echo "$KS_B64" | base64 -d > /tmp/fl.jks
           AS=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          "$AS" sign --ks /tmp/fl.jks --ks-key-alias focuslock --ks-pass env:KS_PASS --key-pass env:KS_PASS \
-            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true "$APK"
+          for APK in dist/*.apk; do
+            "$AS" sign --ks /tmp/fl.jks --ks-key-alias focuslock --ks-pass env:KS_PASS --key-pass env:KS_PASS \
+              --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true "$APK"
+          done
           rm -f /tmp/fl.jks
       # Validate the final APK. The build fails here instead of shipping a broken package.
       - name: Verify APK (signature, alignment, manifest)
@@ -64,25 +73,26 @@ jobs:
         run: |
           set -euo pipefail
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          echo "== apksigner verify =="
-          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee verify.txt
-          grep -q "Verifies" verify.txt
-          echo "== zipalign check =="
-          "$BT/zipalign" -c 4 "$APK" && echo "aligned OK"
-          echo "== manifest summary =="
-          "$BT/aapt" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion" | tee badging.txt
-          CERT=$(grep -m1 "SHA-256 digest" verify.txt | sed 's/.*: //')
-          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
           FV=$(flutter --version | head -1)
-          {
-            echo "### APK check"
-            echo "- Flutter: \`$FV\`"
-            echo "- Signing cert SHA-256: \`$CERT\` (must be IDENTICAL in every build, otherwise updates fail)"
-            echo "- File SHA-256: \`$SHA\`"
-            echo '```'; cat badging.txt; echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY" release_notes.md
-          unzip -tq "$APK"
+          echo "### APK check" | tee -a "$GITHUB_STEP_SUMMARY" release_notes.md
+          echo "- Flutter: \`$FV\`" | tee -a "$GITHUB_STEP_SUMMARY" release_notes.md
+          echo "- **app-arm64-release.apk** is the small file (recommended for almost every phone). **app-release.apk** works on every phone." | tee -a "$GITHUB_STEP_SUMMARY" release_notes.md
+          for APK in dist/*.apk; do
+            N=$(basename "$APK")
+            echo "== $N: apksigner verify =="
+            "$BT/apksigner" verify --verbose --print-certs "$APK" | tee verify.txt
+            grep -q "Verifies" verify.txt
+            "$BT/zipalign" -c 4 "$APK" && echo "aligned OK"
+            "$BT/aapt" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion" | tee badging.txt
+            unzip -tq "$APK"
+            CERT=$(grep -m1 "SHA-256 digest" verify.txt | sed 's/.*: //')
+            SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+            SZ=$(du -h "$APK" | cut -f1)
+            {
+              echo "- \`$N\` ($SZ) SHA-256: \`$SHA\`"
+              echo "  - signing cert SHA-256: \`$CERT\` (must be IDENTICAL in every build, otherwise updates fail)"
+            } | tee -a "$GITHUB_STEP_SUMMARY" release_notes.md
+          done
       # On failure, publish the error lines to a 'buildlog' branch so they can be read
       - name: Publish build log on failure
         if: failure()
@@ -102,12 +112,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: focus-lock-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: dist/*.apk
       # Publish the APK as a GitHub Release (visible in the repo's "Releases" section)
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Focus Lock v1.0.${{ github.run_number }}
           body_path: release_notes.md
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            dist/app-release.apk
+            dist/app-arm64-release.apk
           make_latest: true
