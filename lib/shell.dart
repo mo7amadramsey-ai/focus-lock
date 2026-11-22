@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'ai_page.dart';
 import 'calendar_tab.dart';
 import 'courses_page.dart';
 import 'docs.dart';
@@ -7,10 +8,11 @@ import 'home_page.dart';
 import 'library_page.dart';
 import 'lock_ctl.dart';
 import 'lock_modes.dart';
+import 'moodle_page.dart';
 import 'notebook_tab.dart';
+import 'plan_view.dart';
 import 'settings_page.dart';
 import 'study.dart';
-import 'study_page.dart';
 import 'theme.dart';
 
 /// The app: five tabs at the bottom, settings in the top bar.
@@ -23,6 +25,29 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int i = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoRefresh());
+  }
+
+  /// Keeps the links fresh by itself: when the last read is older than 12 hours and the student saved the Moodle login,
+  /// the courses are read again as soon as the app opens (the same page as the manual sync, which closes itself).
+  /// Without a saved login nothing opens by itself; the student syncs by hand.
+  Future<void> _autoRefresh() async {
+    try {
+      await study.load();
+      if (!mounted || study.links.isEmpty || lock.active) return;
+      final at = study.lastSync;
+      if (at != null && DateTime.now().difference(at) < const Duration(hours: 12)) return;
+      if (await savedLogin() == null) return;
+      if (!mounted) return;
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => const MoodlePage(autoSync: true)));
+      await study.load();
+      study.fetchDurations();
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext c) => AnimatedBuilder(
@@ -51,11 +76,16 @@ class _MainShellState extends State<MainShell> {
       );
 }
 
-/// Top bar shared by the tabs: title, the strict-mode button and the settings
+/// Top bar shared by the tabs: title, the AI assistant, the strict-mode button and the settings
 AppBar topBar(BuildContext c, String title, {List<Widget> extra = const []}) => AppBar(
       title: Text(title),
       actions: [
         ...extra,
+        IconButton(
+          tooltip: 'المساعد الذكي',
+          icon: const Icon(Icons.auto_awesome_outlined),
+          onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const AiHubPage())),
+        ),
         AnimatedBuilder(
           animation: lock,
           builder: (_, __) => IconButton(
@@ -99,7 +129,7 @@ class _PlanPageState extends State<PlanPage> {
               ),
             ),
           ),
-          Expanded(child: AnimatedBuilder(animation: study, builder: (_, __) => cal ? const CalendarTab() : const PlanTab())),
+          Expanded(child: AnimatedBuilder(animation: study, builder: (_, __) => cal ? const CalendarTab() : const SmartPlanTab())),
         ]),
       );
 }

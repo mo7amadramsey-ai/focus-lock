@@ -2,7 +2,6 @@ package com.mohammed.focus_lock
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
-import android.media.AudioManager
 import android.net.Uri
 import android.telecom.TelecomManager
 import android.graphics.Color
@@ -10,6 +9,8 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Region
 import android.graphics.RegionIterator
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -78,19 +79,27 @@ class LockService : AccessibilityService() {
         return super.onUnbind(intent)
     }
 
-    // True while a cellular call is ringing or in progress. Needs no permission.
-    // (MODE_IN_COMMUNICATION is deliberately NOT included: VoIP apps must not be a way out of the lock.)
-    private fun inCall(): Boolean = try {
-        val m = getSystemService(AUDIO_SERVICE) as AudioManager
-        m.mode == AudioManager.MODE_RINGTONE || m.mode == AudioManager.MODE_IN_CALL
-    } catch (e: Exception) { false }
-
     private fun active() = getSharedPreferences("strict", MODE_PRIVATE).getLong("left", 0L) > 0L && !inCall()
 
     private fun okPkg(p: String?) = p != null && (p == packageName || p in allowed)
 
+    // A call is ringing or in progress. The in-call screen and the incoming-call pop-up belong to the phone maker's
+    // own packages (they differ from phone to phone), so while a call exists nothing is covered and nothing is pulled back.
+    // TelecomManager needs the phone permission; if it is not granted the audio mode tells the same thing.
+    private fun inCall(): Boolean {
+        try {
+            if (Build.VERSION.SDK_INT >= 23 && getSystemService(TelecomManager::class.java).isInCall) return true
+        } catch (e: Exception) {}
+        try {
+            val m = (getSystemService(AUDIO_SERVICE) as AudioManager).mode
+            if (m == AudioManager.MODE_IN_CALL || m == AudioManager.MODE_RINGTONE) return true
+        } catch (e: Exception) {}
+        return false
+    }
+
     private fun refresh() {
         if (!active()) { drawPanels(emptyList()); return }
+        if (inCall()) { drawPanels(emptyList()); return }
         val list = windows.sortedByDescending { it.layer } // top-most window first
         val allowedAbove = Region()
         val rects = mutableListOf<Rect>()
