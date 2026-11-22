@@ -1,3 +1,4 @@
+import 'flavor.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -211,7 +212,7 @@ class _NotebookPageState extends State<NotebookPage> {
             const Expanded(child: Text('ملاحظات مرتبطة بالفيديو', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
             IconButton(tooltip: 'إضافة', icon: const Icon(Icons.add_comment_outlined), onPressed: _addStamp),
             FilledButton.tonalIcon(
-              onPressed: loadingCaps ? null : _captions,
+              onPressed: loadingCaps || kPlay ? null : _captions,
               icon: loadingCaps
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.subtitles_outlined),

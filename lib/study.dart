@@ -1,3 +1,4 @@
+import 'flavor.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -631,7 +632,7 @@ class StudyStore extends ChangeNotifier {
   List<AgendaItem> overdue() => agenda().where((a) => !a.done && a.when.isBefore(DateTime.now())).toList();
 
   Future<void> fetchDurations() async {
-    if (fetching) return;
+    if (kPlay || fetching) return; // Play build: unknown lengths count as 15 minutes
     final ids = <String>{};
     for (final l in links) {
       final id = ytId(l);

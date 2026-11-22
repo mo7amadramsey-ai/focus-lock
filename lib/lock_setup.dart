@@ -1,3 +1,4 @@
+import 'flavor.dart';
 import 'package:flutter/material.dart';
 import 'channel.dart';
 import 'lock_ctl.dart';
@@ -18,6 +19,7 @@ Future<bool> ensureLockReady(BuildContext c) async {
     } catch (_) {}
     return false;
   }
+  if (kPlay) return true; // Play build: screen pinning, nothing to enable
   final owner = await ch.invokeMethod<bool>('isDeviceOwner') ?? false;
   final acc = await ch.invokeMethod<bool>('isAccessibilityEnabled') ?? false;
   if (owner || acc) return true;

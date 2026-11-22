@@ -1,3 +1,4 @@
+import 'flavor.dart';
 import 'package:flutter/material.dart';
 import 'course_download.dart';
 import 'doc_open.dart';
@@ -104,7 +105,7 @@ class CourseDetailPage extends StatelessWidget {
                   icon: const Icon(Icons.lock_outline_rounded),
                   onPressed: () => startPlaylistLock(c, undone),
                 ),
-                IconButton(tooltip: 'تنزيل فيديوهات المادة كاملة', icon: const Icon(Icons.download_rounded), onPressed: () => downloadCourseVideos(c, cid)),
+                if (!kPlay) IconButton(tooltip: 'تنزيل فيديوهات المادة كاملة', icon: const Icon(Icons.download_rounded), onPressed: () => downloadCourseVideos(c, cid)),
               ],
             ),
             body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [

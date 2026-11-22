@@ -1,3 +1,4 @@
+import 'flavor.dart';
 import 'package:flutter/material.dart';
 import 'channel.dart';
 import 'lock_modes.dart';
@@ -99,7 +100,7 @@ class _HomePageState extends State<HomePage> {
                   ]),
                 ]),
               ),
-              if (lockReady == false)
+              if (lockReady == false && !kPlay)
                 Card(
                   child: ListTile(
                     leading: Icon(Icons.shield_outlined, color: kWarn),

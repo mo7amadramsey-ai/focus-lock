@@ -170,6 +170,9 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 // True only when OUR window has the focus and is not in a floating / split / pop-up window.
                 // (With floating windows the app stays "resumed", so the lifecycle alone cannot tell.)
+                // Play build: Android screen pinning instead of the accessibility service
+                "pin" -> { try { startLockTask() } catch (e: Exception) {}; result.success(true) }
+                "unpin" -> { try { stopLockTask() } catch (e: Exception) {}; result.success(true) }
                 // Study reminders
                 "setReminders" -> {
                     Notifier.set(this, call.argument<String>("json") ?: "[]")

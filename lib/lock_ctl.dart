@@ -1,3 +1,4 @@
+import 'flavor.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -83,6 +84,14 @@ class LockCtl extends ChangeNotifier with WidgetsBindingObserver {
 
   // Tells the Android side what to enforce: "stay in the app" while any layer is on
   Future<void> _native() async {
+    if (kPlay) {
+      // Google Play build: Android screen pinning (the system asks you once; no accessibility service)
+      try {
+        await ch.invokeMethod(active ? 'pin' : 'unpin');
+      } catch (_) {}
+      strictActive.value = active;
+      return;
+    }
     try {
       if (vidOn) {
         await ch.invokeMethod('startLock', {'left': vidLeft, 'type': vidType.isEmpty ? 'local' : vidType, 'target': vidTarget});

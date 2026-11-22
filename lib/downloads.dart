@@ -1,3 +1,4 @@
+import 'flavor.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -44,6 +45,7 @@ class DownloadManager extends ChangeNotifier {
       [for (final t in tasks) if (t.active && t.dir.path == dir.path && t.number != null) t.number!];
 
   bool start(String url, Directory dir, {String? name, int? number, String? quality}) {
+    if (kPlay) return false; // Google Play build: no YouTube downloading
     final vid = VideoId.parseVideoId(url);
     final dup = tasks.any((t) =>
         t.active && !t.direct && t.dir.path == dir.path && VideoId.parseVideoId(t.url) == vid && t.quality == quality);

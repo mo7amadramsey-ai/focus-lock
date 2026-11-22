@@ -2,6 +2,7 @@
 // YouTube lectures and Moodle videos play in the app's own player (no YouTube app, no suggestions),
 // documents open in the in-app viewer, other sites are limited to Moodle / YouTube / Google Drive,
 // and every item can be downloaded (YouTube with a quality choice).
+import 'flavor.dart';
 import 'lock_ctl.dart';
 import 'lock_setup.dart';
 import 'dart:async';
@@ -117,6 +118,11 @@ Future<void> openLinkInApp(BuildContext c,
     return;
   }
   final yid = VideoId.parseVideoId(url);
+  if (yid != null && kPlay) {
+    // Google Play build: YouTube plays only in the official embedded player
+    await Navigator.push(c, MaterialPageRoute(builder: (_) => PreviewPage(url: url, title: title, youtubeId: yid)));
+    return;
+  }
   if (yid != null) {
     final su = await _spin(c, youtubeStreamUrl(yid));
     if (!c.mounted) return;
