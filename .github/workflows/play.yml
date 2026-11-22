@@ -31,7 +31,7 @@ jobs:
       - name: Disable lintVital tasks
         run: |
           mkdir -p ~/.gradle/init.d
-          printf 'allprojects { tasks.configureEach { t -> if (t.name.startsWith(\"lintVital\")) t.enabled = false } }\\n' > ~/.gradle/init.d/skip-lint.gradle
+          printf 'allprojects { tasks.configureEach { t -> if (t.name.startsWith("lintVital")) t.enabled = false } }\n' > ~/.gradle/init.d/skip-lint.gradle
       - name: Check signing secrets exist
         env:
           KS_B64: ${{ secrets.FL_KEYSTORE_B64 }}
