@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_lock.dart';
+import 'channel.dart';
+import 'link_open.dart';
 import 'browser_page.dart';
 import 'lock_ctl.dart';
 import 'lock_modes.dart';
@@ -106,20 +108,34 @@ class _BootState extends State<Boot> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _go());
   }
 
-  void _go() {
+  Future<void> _go() async {
     if (!mounted) return;
     Widget next = const MainShell();
     if (study.moodleHost.isEmpty) {
       next = const SetupPage();
     } else if (lock.vidOn) {
       final t = lock.vidTarget, left = lock.vidLeft;
-      next = switch (lock.vidType) {
-        'web' => StrictWebPage(url: t, leftMs: left),
-        'moodle' => StrictMoodlePage(url: t, leftMs: left),
-        'playlist' => PlaylistLockPage(ids: t.split(','), leftMs: left),
-        _ => PlayerPage(path: t, leftMs: left),
-      };
+      switch (lock.vidType) {
+        case 'web':
+          next = StrictWebPage(url: t, leftMs: left);
+        case 'moodle':
+          next = StrictMoodlePage(url: t, leftMs: left);
+        case 'playlist':
+          next = PlaylistLockPage(ids: t.split(','), leftMs: left);
+        case 'yt':
+          // a locked YouTube video: get its stream again, or fall back to the clean embedded page
+          final su = await youtubeStreamUrl(t);
+          next = su != null
+              ? StreamPlayerPage(url: su, title: '', resumeKey: 'yt:$t', lockType: 'yt', lockTarget: t)
+              : PlaylistLockPage(ids: [t], leftMs: left);
+        case 'stream':
+          final ck = await cookiesFor(t);
+          next = StreamPlayerPage(url: t, title: '', resumeKey: 'moodle:$t', lockType: 'stream', lockTarget: t, headers: {if (ck.isNotEmpty) 'Cookie': ck});
+        default:
+          next = PlayerPage(path: t, leftMs: left);
+      }
     }
+    if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => next));
   }
 

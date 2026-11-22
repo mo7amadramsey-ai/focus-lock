@@ -2,6 +2,8 @@
 // YouTube lectures and Moodle videos play in the app's own player (no YouTube app, no suggestions),
 // documents open in the in-app viewer, other sites are limited to Moodle / YouTube / Google Drive,
 // and every item can be downloaded (YouTube with a quality choice).
+import 'lock_ctl.dart';
+import 'lock_setup.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -119,7 +121,7 @@ Future<void> openLinkInApp(BuildContext c,
     final su = await _spin(c, youtubeStreamUrl(yid));
     if (!c.mounted) return;
     if (su != null) {
-      await Navigator.push(c, MaterialPageRoute(builder: (_) => StreamPlayerPage(url: su, title: title, resumeKey: 'yt:$yid')));
+      await Navigator.push(c, MaterialPageRoute(builder: (_) => StreamPlayerPage(url: su, title: title, resumeKey: 'yt:$yid', lockType: 'yt', lockTarget: yid)));
     } else {
       await Navigator.push(c, MaterialPageRoute(builder: (_) => PreviewPage(url: url, title: title, youtubeId: yid)));
     }
@@ -137,7 +139,7 @@ Future<void> openLinkInApp(BuildContext c,
         c,
         MaterialPageRoute(
             builder: (_) => StreamPlayerPage(
-                url: url, title: title, resumeKey: 'moodle:$url', headers: {if (ck.isNotEmpty) 'Cookie': ck})));
+                url: url, title: title, resumeKey: 'moodle:$url', lockType: 'stream', lockTarget: url, headers: {if (ck.isNotEmpty) 'Cookie': ck})));
     return;
   }
   if (group == 'file') {
@@ -218,7 +220,9 @@ class StreamPlayerPage extends StatefulWidget {
   final String title;
   final String resumeKey;
   final Map<String, String> headers;
-  const StreamPlayerPage({super.key, required this.url, required this.title, required this.resumeKey, this.headers = const {}});
+  final String lockType, lockTarget; // how a video lock on this video is resumed after a restart (yt id / Moodle file url)
+  const StreamPlayerPage(
+      {super.key, required this.url, required this.title, required this.resumeKey, this.headers = const {}, this.lockType = '', this.lockTarget = ''});
   @override
   State<StreamPlayerPage> createState() => _StreamPlayerPageState();
 }
@@ -229,12 +233,15 @@ class _StreamPlayerPageState extends State<StreamPlayerPage> {
   String? error;
   double speed = 1.0;
   Timer? _hide;
+  final playing = ValueNotifier<bool>(true); // tells the video lock whether the video is playing
 
   @override
   void initState() {
     super.initState();
     WakelockPlus.enable();
     v = VideoPlayerController.networkUrl(Uri.parse(widget.url), httpHeaders: widget.headers);
+    v.addListener(() => playing.value = v.value.isPlaying);
+    if (lock.vidOn && widget.lockType.isNotEmpty) lock.attachPlaying(playing); // resumed after a restart
     _init();
   }
 
@@ -261,6 +268,21 @@ class _StreamPlayerPageState extends State<StreamPlayerPage> {
     });
   }
 
+  // Lock this video: you cannot leave it until the time ends (the app lock, if any, pauses meanwhile)
+  Future<void> _lockVideo() async {
+    if (widget.lockType.isEmpty) return;
+    if (lock.vidOn) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('قفل الفيديو يعمل. اضغط الشريط العلوي لتمديده')));
+      return;
+    }
+    if (!await ensureLockReady(context) || !mounted) return;
+    final remain = v.value.duration - v.value.position;
+    final extra = await confirmStrict(context, remain, max: kMaxVideoLockMs, title: 'قفل الفيديو');
+    if (extra == null || !mounted) return;
+    await lock.startVideo(lockMs(remain, extra, max: kMaxVideoLockMs), widget.lockType, widget.lockTarget);
+    lock.attachPlaying(playing);
+  }
+
   void _seekBy(int sec) {
     final p = v.value.position + Duration(seconds: sec);
     final max = v.value.duration;
@@ -279,6 +301,7 @@ class _StreamPlayerPageState extends State<StreamPlayerPage> {
   @override
   void dispose() {
     _hide?.cancel();
+    lock.attachPlaying(null);
     if (ready) {
       setPos(widget.resumeKey, v.value.position.inMilliseconds);
       flushPos();
@@ -298,7 +321,11 @@ class _StreamPlayerPageState extends State<StreamPlayerPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => AnimatedBuilder(
+      animation: lock,
+      builder: (_, __) => PopScope(
+        canPop: !lock.vidOn,
+        child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
           child: error != null
@@ -328,14 +355,20 @@ class _StreamPlayerPageState extends State<StreamPlayerPage> {
                       ]),
                     ),
         ),
-      );
+      )));
 
   Widget _controls() => Container(
         color: Colors.black54,
         child: Column(children: [
           Row(children: [
-            IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
+            IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: lock.vidOn ? null : () => Navigator.pop(context)),
             Expanded(child: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white))),
+            if (widget.lockType.isNotEmpty)
+              IconButton(
+                tooltip: 'قفل الفيديو',
+                icon: Icon(lock.vidOn ? Icons.lock_rounded : Icons.lock_outline_rounded, color: lock.vidOn ? Colors.redAccent : Colors.white),
+                onPressed: _lockVideo,
+              ),
             PopupMenuButton<double>(
               icon: const Icon(Icons.speed, color: Colors.white),
               onSelected: (s) {
