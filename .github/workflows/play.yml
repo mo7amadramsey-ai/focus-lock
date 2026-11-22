@@ -73,7 +73,7 @@ jobs:
           "$BT/zipalign" -c 4 dist/focus-lock-play-test.apk
           echo "== permissions in the Play build =="
           "$BT/aapt" dump permissions dist/focus-lock-play-test.apk | tee perms.txt
-          ! grep -E "MANAGE_EXTERNAL_STORAGE|ANSWER_PHONE_CALLS|READ_PHONE_STATE|HIDE_OVERLAY_WINDOWS|BIND_ACCESSIBILITY_SERVICE|BIND_DEVICE_ADMIN" perms.txt
+          if grep -E "MANAGE_EXTERNAL_STORAGE|ANSWER_PHONE_CALLS|READ_PHONE_STATE|HIDE_OVERLAY_WINDOWS|BIND_ACCESSIBILITY_SERVICE|BIND_DEVICE_ADMIN" perms.txt; then echo "::error::restricted permission found in the Play build"; exit 1; fi
           unzip -tq dist/focus-lock-play.aab
           jarsigner -verify dist/focus-lock-play.aab | head -3
           sha256sum dist/* | tee -a "$GITHUB_STEP_SUMMARY"
