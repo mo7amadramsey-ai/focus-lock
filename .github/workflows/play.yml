@@ -6,6 +6,8 @@ name: Build Google Play bundle
 # (it uses Android screen pinning), and none of the restricted permissions. See docs/PLAY_STORE.md.
 on:
   workflow_dispatch:
+  push:
+    branches: [play-build]   # pushing this branch also builds the Play bundle
 permissions:
   contents: write   # only to publish the failure log branch
 jobs:
