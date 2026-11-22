@@ -1,0 +1,26 @@
+Running Gradle task 'bundleRelease'...                          
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Initialization script '/home/runner/.gradle/init.d/skip-lint.gradle' line: 1
+
+* What went wrong:
+Could not compile initialization script '/home/runner/.gradle/init.d/skip-lint.gradle'.
+> startup failed:
+  initialization script '/home/runner/.gradle/init.d/skip-lint.gradle': 1: Unexpected character: '\' @ line 1, column 99.
+     Vital")) t.enabled = false } }\n
+                                   ^
+
+  1 error
+
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 9s
+Running Gradle task 'bundleRelease'...                             10.1s
+Gradle task bundleRelease failed with exit code 1
