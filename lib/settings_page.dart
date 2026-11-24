@@ -159,6 +159,13 @@ class _StudySettingsPageState extends State<StudySettingsPage> {
                 if (v) study.askNotifications();
               },
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('تنزيل ملفات PDF الجديدة تلقائياً'),
+              subtitle: const Text('بعد كل مزامنة تُحفظ الملفات الجديدة في مجلد باسم المادة داخل المستندات'),
+              value: study.autoPdf,
+              onChanged: (v) => study.setSettings(autoPdfOn: v),
+            ),
             const Divider(height: 28),
             const Text('عنوان المودل', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'docs.dart';
 import 'link_open.dart';
+import 'course_download.dart';
 import 'notebook_page.dart';
 import 'preview_page.dart';
 import 'storage.dart';
@@ -76,6 +77,9 @@ const crawlJs = r'''
     }
     function push(u, cid, title, sec) {
       u = u.split("#")[0];
+      // links from the course page carry redirect=1: Moodle then jumps to the external site, which the browser blocks;
+      // without it Moodle shows a page that contains the external address (YouTube...), which we can read
+      if (/\/mod\/url\/view\.php/.test(u)) u = u.replace(/([?&])redirect=1(&|$)/, function(m, a, b){ return b ? a : ""; });
       if (visited[u] || count + queue.length > 3000) return;
       visited[u] = 1; queue.push({u: u, cid: cid, title: title, sec: sec || ""});
     }
@@ -143,6 +147,11 @@ const crawlJs = r'''
             // pages, books, lessons and forums are listed too (the app shows what Moodle shows)
             if (/\/mod\/(page|book|lesson|forum|imscp)\/view\.php/.test(u)) emit(it.cid, "act", title, u, "", sc);
             push(u, it.cid, title, sc);
+            return;
+          }
+          // any other Moodle activity type (external tools, H5P, SCORM, video platforms...): list it so it is not lost
+          if (u.indexOf(base) === 0 && /\/mod\/[a-z0-9_]+\/view\.php/.test(u) && !/\/mod\/(assign|quiz|page|book|lesson|forum|imscp|resource|url|folder|label)\//.test(u)) {
+            emit(it.cid, "act", title, u, "", sc);
             return;
           }
           if (/^https?:/.test(u) && u.indexOf(base) !== 0) emit(it.cid, "ext", title || u, u, "", sc);
@@ -297,8 +306,9 @@ class LinkCrawler extends ChangeNotifier {
       case 'done':
         running = false;
         save();
-        study.recordCrawl(links.where((l) => !_prev.contains('${l.cid}|${l.url}')).toList(), List.of(tasks),
-            first: _prev.isEmpty);
+        final fresh = links.where((l) => !_prev.contains('${l.cid}|${l.url}')).toList();
+        study.recordCrawl(fresh, List.of(tasks), first: _prev.isEmpty);
+        if (_prev.isNotEmpty) autoDownloadNewDocs(fresh); // new PDFs are saved by themselves
         break;
       case 'err':
         running = false;

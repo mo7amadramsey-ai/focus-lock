@@ -469,6 +469,7 @@ class DocsPage extends StatefulWidget {
 
 class _DocsPageState extends State<DocsPage> {
   List<File> files = [];
+  Directory? root;
   bool loaded = false;
   String filter = 'all', query = '';
 
@@ -489,7 +490,8 @@ class _DocsPageState extends State<DocsPage> {
 
   Future<void> _load() async {
     final d = await docsRoot();
-    final l = d.listSync().whereType<File>().toList()..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    root = d;
+    final l = d.listSync(recursive: true).whereType<File>().toList()..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
     if (mounted) {
       setState(() {
         files = l;
@@ -648,7 +650,7 @@ class _DocsPageState extends State<DocsPage> {
                                 child: Icon(_look(extOf(f.path)).$1, color: _look(extOf(f.path)).$2),
                               ),
                               title: Text(baseName(f.path), maxLines: 2, overflow: TextOverflow.ellipsis),
-                              subtitle: Text('${extOf(f.path).replaceAll('.', '').toUpperCase()}  •  ${_size(f)}', style: const TextStyle(color: Colors.white54)),
+                              subtitle: Text('${root != null && f.parent.path != root!.path ? '${entityName(f.parent)}  •  ' : ''}${extOf(f.path).replaceAll('.', '').toUpperCase()}  •  ${_size(f)}', style: const TextStyle(color: Colors.white54)),
                               onTap: () => Navigator.push(c, MaterialPageRoute(builder: (_) => DocViewerPage(path: f.path))),
                               trailing: IconButton(icon: const Icon(Icons.delete_outline), color: Colors.white54, onPressed: () => _delete(f)),
                             ),

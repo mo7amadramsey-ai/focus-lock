@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_lock.dart';
 import 'channel.dart';
+import 'downloads.dart';
 import 'link_open.dart';
 import 'browser_page.dart';
 import 'lock_ctl.dart';
@@ -19,6 +20,14 @@ Future<void> main() async {
   await study.load(); // study data, settings and the Moodle address first
   await lock.init(); // a strict session that was running comes back
   study.scheduleReminders();
+  // Downloads keep running in the background: a foreground service holds the app alive while any download is active
+  var lastActive = 0;
+  dl.addListener(() {
+    final n = dl.activeCount;
+    if (n == lastActive) return;
+    lastActive = n;
+    ch.invokeMethod('keepAlive', {'on': n > 0, 'text': 'جاري تنزيل $n ملف'}).catchError((_) {});
+  });
   homeBuilder = () => const MainShell();
   // Free rotation: landscape video / documents whenever you turn the phone
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);

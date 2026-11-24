@@ -160,6 +160,9 @@ class AiStore extends ChangeNotifier {
     }
   }
 
+  /// Models tried in order when the chosen one is overloaded (503) or out of quota (429)
+  static const _fallbacks = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
+
   Future<String> _call(String cid, List<AiMsg> hist) async {
     final h = hist.length > 24 ? hist.sublist(hist.length - 24) : hist;
     var start = 0;
@@ -184,14 +187,45 @@ class AiStore extends ChangeNotifier {
       'contents': contents,
       'generationConfig': {'temperature': 0.5},
     });
+    // "503 high demand" is temporary on Google's side: retry once, then silently use another model
+    final models = <String>[];
+    for (final m in [model.trim(), ..._fallbacks]) {
+      if (m.isNotEmpty && !models.contains(m)) models.add(m);
+    }
+    AiError? last;
+    for (final m in models) {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          return await _once(m, body);
+        } on AiError catch (e) {
+          last = e;
+          if (e.code == 503 || e.code == 500 || e.code == 504) {
+            if (attempt == 0) {
+              await Future.delayed(const Duration(seconds: 2));
+              continue;
+            }
+            break; // still busy: next model
+          }
+          if (e.code == 429 || e.code == 404) break; // quota / unknown model: next model
+          rethrow; // wrong key, blocked content...: the same for every model
+        } on TimeoutException {
+          last = AiError(504, 'timeout');
+          break;
+        }
+      }
+    }
+    throw last ?? AiError(503, 'unavailable');
+  }
+
+  Future<String> _once(String m, String body) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
     try {
-      final url = 'https://generativelanguage.googleapis.com/v1beta/models/${Uri.encodeComponent(model.trim())}:generateContent';
+      final url = 'https://generativelanguage.googleapis.com/v1beta/models/${Uri.encodeComponent(m)}:generateContent';
       final req = await client.postUrl(Uri.parse(url));
       req.headers.set('content-type', 'application/json; charset=utf-8');
       req.headers.set('x-goog-api-key', _key ?? '');
       req.add(utf8.encode(body));
-      final res = await req.close().timeout(const Duration(seconds: 90));
+      final res = await req.close().timeout(const Duration(seconds: 60));
       final txt = await res.transform(utf8.decoder).join();
       Map? j;
       try {
@@ -212,6 +246,17 @@ class AiStore extends ChangeNotifier {
     }
   }
 
+  /// Sends the last question again (after an error such as a busy service)
+  Future<void> retry(String cid) async {
+    final list = chat(cid);
+    while (list.isNotEmpty && list.last.error) {
+      list.removeLast();
+    }
+    if (list.isEmpty || list.last.role != 'user') return;
+    final t = list.removeLast().text;
+    await send(cid, t);
+  }
+
   String _explain(Object e) {
     if (e is AiError) {
       final m = e.message.toLowerCase();
@@ -219,6 +264,7 @@ class AiStore extends ChangeNotifier {
       if (e.code == 401 || e.code == 403) return 'رفضت Google المفتاح أو لا صلاحية له. تأكد من المفتاح من Google AI Studio.';
       if (e.code == 404) return 'اسم الموديل «$model» غير موجود عند Google. غيّره من الإعدادات (مثال: gemini-2.5-flash).';
       if (e.code == 429) return 'استُهلكت الحصة المجانية مؤقتاً. انتظر قليلاً ثم أعد المحاولة.';
+      if (e.code == 503 || e.code == 500 || e.code == 504) return 'خدمة Google مزدحمة الآن، وجرّبتُ عدة نماذج دون نجاح. هذا مؤقت عادةً. اضغط «إعادة المحاولة» بعد قليل.';
       return e.code == 0 ? e.message : 'خطأ من الخدمة (${e.code}): ${e.message}';
     }
     if (e is SocketException) return 'لا يوجد اتصال بالإنترنت.';

@@ -105,7 +105,7 @@ class CourseDetailPage extends StatelessWidget {
                   icon: const Icon(Icons.lock_outline_rounded),
                   onPressed: () => startPlaylistLock(c, undone),
                 ),
-                if (!kPlay) IconButton(tooltip: 'تنزيل فيديوهات المادة كاملة', icon: const Icon(Icons.download_rounded), onPressed: () => downloadCourseVideos(c, cid)),
+                IconButton(tooltip: 'تنزيل المادة (فيديوهات وملفات)', icon: const Icon(Icons.download_rounded), onPressed: () => downloadCourse(c, cid)),
               ],
             ),
             body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [

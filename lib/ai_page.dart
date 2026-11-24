@@ -321,7 +321,11 @@ class _AiChatPageState extends State<AiChatPage> {
           borderRadius: BorderRadius.circular(18),
           border: mine ? null : Border.all(color: kOutline),
         ),
-        child: SelectableText(m.text, style: TextStyle(color: fg, height: 1.6, fontSize: 15)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          SelectableText(m.text, style: TextStyle(color: fg, height: 1.6, fontSize: 15)),
+          if (m.error && !ai.isBusy(widget.cid))
+            TextButton.icon(onPressed: () => ai.retry(widget.cid), icon: const Icon(Icons.refresh, size: 18), label: const Text('إعادة المحاولة')),
+        ]),
       ),
     );
   }

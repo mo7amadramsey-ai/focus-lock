@@ -170,6 +170,15 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 // True only when OUR window has the focus and is not in a floating / split / pop-up window.
                 // (With floating windows the app stays "resumed", so the lifecycle alone cannot tell.)
+                // Keeps the process alive while downloads run (foreground service)
+                "keepAlive" -> {
+                    val on = call.argument<Boolean>("on") ?: false
+                    val i = android.content.Intent(this, KeepAliveService::class.java).putExtra("text", call.argument<String>("text") ?: "")
+                    try {
+                        if (on) { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i) } else stopService(i)
+                    } catch (e: Exception) {}
+                    result.success(true)
+                }
                 // Play build: Android screen pinning instead of the accessibility service
                 "pin" -> { try { startLockTask() } catch (e: Exception) {}; result.success(true) }
                 "unpin" -> { try { stopLockTask() } catch (e: Exception) {}; result.success(true) }

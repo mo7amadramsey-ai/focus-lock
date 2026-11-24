@@ -24,6 +24,7 @@ class LockCtl extends ChangeNotifier with WidgetsBindingObserver {
   int appLeft = 0, vidLeft = 0;
   String vidType = '', vidTarget = '';
   bool fg = true, focus = true, ringing = false, counting = false;
+  bool permsOk = true; // the permissions that make the lock work (accessibility service / device owner) are on
   String? flash; // short message after a layer ended
   DateTime _flashUntil = DateTime.fromMillisecondsSinceEpoch(0);
   ValueListenable<bool>? _playing;
@@ -168,7 +169,15 @@ class LockCtl extends ChangeNotifier with WidgetsBindingObserver {
         focus = await ch.invokeMethod<bool>('isFocused') ?? true;
       } catch (_) {}
     }
-    final can = fg && focus && (vidOn ? (_playing?.value ?? true) : true);
+    if (!kPlay && _n % 3 == 0) {
+      try {
+        final owner = await ch.invokeMethod<bool>('isDeviceOwner') ?? false;
+        final acc = await ch.invokeMethod<bool>('isAccessibilityEnabled') ?? false;
+        permsOk = owner || acc;
+      } catch (_) {}
+    }
+    // no permissions = the lock cannot hold you, so the time does not run
+    final can = fg && focus && permsOk && (vidOn ? (_playing?.value ?? true) : true);
     counting = can;
     if (can) {
       if (vidOn) {
@@ -238,13 +247,15 @@ class LockBanner extends StatelessWidget {
           final bg = ended ? kOk : (lock.counting ? kAccent : kWarn);
           final text = ended
               ? lock.flash!
-              : '${lock.vidOn ? 'قفل الفيديو' : 'الوضع الصارم قيد التنفيذ'} · بقي ${fmtLeft(lock.leftMs)}${lock.counting ? '' : ' (متوقف)'}';
+              : lock.permsOk
+                  ? '${lock.vidOn ? 'قفل الفيديو' : 'الوضع الصارم قيد التنفيذ'} · بقي ${fmtLeft(lock.leftMs)}${lock.counting ? '' : ' (متوقف)'}'
+                  : 'المؤقت متوقف: الصلاحيات ناقصة · اضغط لتفعيلها';
           return Material(
             color: bg,
             child: SafeArea(
               bottom: false,
               child: InkWell(
-                onTap: ended ? null : () => _more(c),
+                onTap: ended ? null : (lock.permsOk ? () => _more(c) : () => ch.invokeMethod('openAccessibilitySettings')),
                 child: Container(
                   height: 32,
                   padding: const EdgeInsets.symmetric(horizontal: 12),

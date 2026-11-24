@@ -34,6 +34,16 @@ object Notifier {
         try { c.getSystemService(NotificationManager::class.java).notify(id, b.build()) } catch (e: Exception) {}
     }
 
+    // Ongoing notification for the download service
+    fun build(c: Context, title: String, body: String, id: Int): android.app.Notification {
+        channel(c)
+        val launch = c.packageManager.getLaunchIntentForPackage(c.packageName)
+        val tap = PendingIntent.getActivity(c, id, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val b = if (Build.VERSION.SDK_INT >= 26) Notification26.builder(c, CH) else android.app.Notification.Builder(c)
+        b.setSmallIcon(c.applicationInfo.icon).setContentTitle(title).setContentText(body).setContentIntent(tap).setOngoing(true)
+        return b.build()
+    }
+
     private fun alarm(c: Context, id: Int, at: Long, title: String, body: String) {
         val i = Intent(c, ReminderReceiver::class.java).putExtra("id", id).putExtra("title", title).putExtra("body", body)
         val pi = PendingIntent.getBroadcast(c, id, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)

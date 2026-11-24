@@ -231,6 +231,7 @@ class StudyStore extends ChangeNotifier {
   bool remindersOn = true;
   String moodleHost = ''; // set at the first start (setup page) or in the settings
   String themeMode = 'system'; // system / light / dark
+  bool autoPdf = true; // download new PDFs by themselves after a Moodle sync
   final focusCourses = <String>{}; // plan only these courses (empty = all)
   DateTime? focusUntil; // ... until this day
   DateTime? lastSync; // when the Moodle links were last read
@@ -309,6 +310,7 @@ class StudyStore extends ChangeNotifier {
     remindersOn = j['rem'] as bool? ?? remindersOn;
     moodleHost = '${j['host'] ?? moodleHost}';
     themeMode = '${j['theme'] ?? themeMode}';
+    autoPdf = j['autoPdf'] as bool? ?? autoPdf;
     focusCourses
       ..clear()
       ..addAll(((j['focus'] as List?) ?? []).map((e) => '$e'));
@@ -321,6 +323,7 @@ class StudyStore extends ChangeNotifier {
         'rem': remindersOn,
         'host': moodleHost,
         'theme': themeMode,
+        'autoPdf': autoPdf,
         'focus': focusCourses.toList(),
         'focusUntil': focusUntil?.toIso8601String(),
         'done': done.toList(),
@@ -392,8 +395,9 @@ class StudyStore extends ChangeNotifier {
     scheduleReminders();
   }
 
-  void setSettings({int? daily, bool? reminders, String? host, String? theme}) {
+  void setSettings({int? daily, bool? reminders, String? host, String? theme, bool? autoPdfOn}) {
     if (theme != null) themeMode = theme;
+    if (autoPdfOn != null) autoPdf = autoPdfOn;
     if (daily != null) dailyMinutes = daily;
     if (reminders != null) remindersOn = reminders;
     if (host != null && host.trim().isNotEmpty) moodleHost = host.trim().toLowerCase();
